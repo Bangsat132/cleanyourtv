@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Gradle wrapper script generated for addon
+set -e
+GRADLE_VERSION=8.5
+GRADLE_DIST_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+WRAPPER_DIR="$(cd "$(dirname "$0")" && pwd)/.gradle/wrapper/dists"
+mkdir -p "$WRAPPER_DIR"
+GRADLE_HOME="$WRAPPER_DIR/gradle-${GRADLE_VERSION}"
+if [ ! -f "$GRADLE_HOME/bin/gradle" ]; then
+  echo "Downloading Gradle $GRADLE_VERSION..."
+  TMP_ZIP=$(mktemp)
+  curl -L -o "$TMP_ZIP" "$GRADLE_DIST_URL"
+  unzip -q -o "$TMP_ZIP" -d "$WRAPPER_DIR"
+  rm "$TMP_ZIP"
+fi
+exec "$GRADLE_HOME/bin/gradle" "$@"
