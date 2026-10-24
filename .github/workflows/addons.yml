@@ -40,3 +40,9 @@ jobs:
             (cd "addons/$a" && chmod +x gradlew && ./gradlew --no-daemon assembleRelease)
             echo "::endgroup::"
           done
+      - name: Upload weather APK
+        if: always() && contains(github.event.head_commit.modified, 'addons/weather/') || contains(github.event.head_commit.added, 'addons/weather/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather
+          path: addons/weather/app/build/outputs/apk/release/app-release.apk
