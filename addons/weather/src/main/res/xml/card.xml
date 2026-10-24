@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<card xmlns:android="http://schemas.android.com/apk/res/android"
+    android:label="@string/card_label"
+    android:description="@string/card_description"
+    android:icon="@mipmap/ic_launcher"
+    android:refreshIntervalMinutes="5"
+    android:glowColor="#FF4FC3F7"
+    android:cardColor="#FF0D1B2A"
+    android:cardTextColor="#FFFFFFFF"
+    android:showTimestamp="true"
+    android:actionPackage="com.gathin.weather"
+    android:actionClass="com.gathin.weather.SettingsActivity" />

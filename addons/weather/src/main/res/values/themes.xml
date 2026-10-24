@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.Weather" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#FF4FC3F7</item>
+        <item name="colorPrimaryDark">#FF0288D1</item>
+        <item name="colorAccent">#FF4FC3F7</item>
+        <item name="android:windowBackground">#FF0D1B2A</item>
+        <item name="android:colorBackground">#FF0D1B2A</item>
+    </style>
+
+    <style name="Theme.Weather.Settings" parent="Theme.Weather">
+        <item name="android:windowBackground">#FF0D1B2A</item>
+        <item name="colorSurface">#FF1B2A3A</item>
+    </style>
+</resources>

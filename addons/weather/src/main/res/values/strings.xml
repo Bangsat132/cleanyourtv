@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">Weather Card</string>
+    <string name="card_label">Weather</string>
+    <string name="card_description">Real-time weather with GPS/IP location</string>
+    <string name="settings_title">Weather Card Settings</string>
+    <string name="pref_api_key_title">OpenWeatherMap API Key</string>
+    <string name="pref_api_key_summary">Get free key at openweathermap.org/api</string>
+    <string name="pref_location_mode_title">Location Mode</string>
+    <string name="pref_location_mode_summary">Choose how to detect location</string>
+    <string name="pref_location_mode_gps">GPS (precise, needs permission)</string>
+    <string name="pref_location_mode_ip">IP-based (approximate, no permission)</string>
+    <string name="pref_location_mode_manual">Manual city</string>
+    <string name="pref_manual_city_title">Manual City</string>
+    <string name="pref_manual_city_summary">City name for manual mode</string>
+    <string name="pref_units_title">Units</string>
+    <string name="pref_units_summary">Temperature units</string>
+    <string name="pref_units_metric">Metric (°C)</string>
+    <string name="pref_units_imperial">Imperial (°F)</string>
+    <string name="pref_refresh_title">Refresh Interval</string>
+    <string name="pref_refresh_summary">How often to fetch weather</string>
+    <string name="pref_refresh_5">5 minutes</string>
+    <string name="pref_refresh_15">15 minutes</string>
+    <string name="pref_refresh_30">30 minutes</string>
+    <string name="pref_refresh_60">1 hour</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_test">Test API</string>
+    <string name="toast_api_ok">API key working</string>
+    <string name="toast_api_fail">API key invalid or network error</string>
+    <string name="toast_location_fail">Could not get location</string>
+    <string name="weather_loading">Loading…</string>
+    <string name="weather_error">Error loading weather</string>
+    <string name="weather_no_api">Set API key in settings</string>
+</resources>
