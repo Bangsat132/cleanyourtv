@@ -1,0 +1,48 @@
+name: Launcher APK
+
+# Builds the launcher and publishes its release APK as a build artifact, so a TV owner can sideload a
+# build without a JDK or Android SDK on their own machine:
+#
+#   gh workflow run "Launcher APK"
+#   gh run watch
+#   gh run download <run id> -n launcher-apk -D out
+#
+# Manual only, like "Add-on APK": nothing here runs on a push or a pull request, so it never holds up a
+# merge. The APK is a workflow artifact, not a release: this repo ships no prebuilt binaries in the tree
+# (AGENTS.md, "Hard rules"). The release build is signed with the debug key, exactly as CI's own build
+# is, so it installs over ADB like the launcher a TV already has.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the launcher
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-34 build-tools;34.0.0
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests and release build
+        working-directory: launcher
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testReleaseUnitTest assembleRelease
+      - name: Show the APK
+        run: |
+          apk=$(ls launcher/app/build/outputs/apk/release/*.apk)
+          ls -l "$apk"
+          sha256sum "$apk" | tee /tmp/sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-apk
+          path: launcher/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
