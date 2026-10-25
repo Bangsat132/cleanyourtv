@@ -65,5 +65,14 @@
             android:authorities="${applicationId}.cardart"
             android:exported="true"
             android:grantUriPermissions="false" />
+
+        <!-- The reading the launcher draws under its date, taken again every 30 minutes and published with the card
+             picture (WeatherJob, WeatherInfo, the launcher's WeatherLine). A job, not a service: the system runs it,
+             it fetches once and stops, and nothing is shown while it works. It needs the network the permission above
+             already covers, and adds none of its own. -->
+        <service
+            android:name=".WeatherJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

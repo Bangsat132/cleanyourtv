@@ -272,6 +272,23 @@
                             android:letterSpacing="0.14"
                             android:textAllCaps="true" />
 
+                        <!-- The weather line: one line under the date, from the weather add-on's last reading
+                             (module card live art). Gone until an add-on publishes one. -->
+                        <TextView
+                            android:id="@+id/weatherLine"
+                            android:gravity="left"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
+                            android:singleLine="true"
+                            android:ellipsize="end"
+                            android:textColor="#D9FFFFFF"
+                            android:textSize="13sp"
+                            android:fontFamily="@string/font_medium"
+                            android:letterSpacing="0.08"
+                            android:focusable="false"
+                            android:visibility="gone" />
+
                         <!-- Lunar date ("Lunar 13/9 · Year of the Horse"), shown when lunar_date is on. -->
                         <TextView
                             android:id="@+id/lunarDate"

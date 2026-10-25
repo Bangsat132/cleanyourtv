@@ -105,6 +105,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     static int COLUMNS = 4;
     private boolean rtlAppGrid;
     private static final long MINUTE_MS = 60_000L;
+    /** How often the weather line under the date is read again from the add-on that publishes it. */
+    private static final long WEATHER_REFRESH_MS = WeatherLine.REFRESH_MS;
     private static final long STATS_MS = 10_000L;
     /**
      * 2025-01-01. TVs without a clock battery boot at the epoch (08:00 in China) and keep it until network
@@ -184,6 +186,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean lunar;
     private int lunarOffset;
     private TextView stats;
+    /** The weather line under the date, from the weather add-on's last reading (WeatherLine). */
+    private TextView weatherLine;
+    private final Runnable weatherTick = new Runnable() {
+        @Override
+        public void run() {
+            updateWeatherLine();
+            handler.postDelayed(this, WEATHER_REFRESH_MS);
+        }
+    };
     private List<RaceWeekend.Race> raceCalendar;
     private View racePanel;
     private TextView raceKicker, raceHeadline, raceSessions;
@@ -485,6 +496,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         lunar = cfg.lunarDate;
         lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault());
         if (lunar) lunarDate.setVisibility(View.VISIBLE);
+        weatherLine = findViewById(R.id.weatherLine);
         greetingName = cfg.greetingName;
         if (cfg.dateBelowClock) moveDateBelowClock();
         if (shamsi) {
@@ -959,6 +971,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             pillsShown = true;
         }
         if (showStats) startStats();
+        weatherTick.run();   // the weather line is read on the way to the front, then every 30 minutes
         sky.update();
         wallpaperPlayer.start();
         handler.postDelayed(minuteTick, MINUTE_MS);
@@ -1135,6 +1148,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient.animate().cancel();
         heroArt.animate().cancel();
         handler.removeCallbacks(minuteTick);
+        handler.removeCallbacks(weatherTick);
         stopStats();
         if (diya != null) diya.stop();
         cancelPendingFocusScroll();
@@ -2487,6 +2501,28 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     // ---- race-weekend panel (a theme's race_calendar) -----------------------------------------------
 
     private static final int RACE_RED = 0xFFFF3B2F;
+
+    /**
+     * The weather line under the date. Any shown module card that exports the live-reading provider is asked for its
+     * last reading, in card order, and the first one that has a reading is shown: an add-on that keeps no weather
+     * publishes nothing and the line stays hidden. Read on the UI thread, as it is a provider file of a few hundred
+     * bytes in this TV's own storage, and only every {@link #WEATHER_REFRESH_MS}.
+     */
+    private void updateWeatherLine() {
+        if (weatherLine == null) return;
+        WeatherLine.Reading reading = null;
+        for (Cards.Card card : cards) {
+            if (card.state != Cards.State.SHOWN) continue;
+            reading = WeatherLine.read(this, card.pkg);
+            if (reading != null) break;
+        }
+        if (reading == null) {
+            weatherLine.setVisibility(View.GONE);
+            return;
+        }
+        weatherLine.setText(reading.text);
+        weatherLine.setVisibility(View.VISIBLE);
+    }
 
     /**
      * Shows or hides the race-weekend panel for this minute. Text only, set once a minute with the clock:

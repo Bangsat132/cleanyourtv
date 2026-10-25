@@ -118,4 +118,16 @@ public class ForecastTest {
         assertEquals(10, Forecast.mph(16));
         assertEquals(62, Forecast.mph(100));
     }
+
+    @Test
+    public void theWeatherLineIsNineCleanFields() {
+        // The launcher splits on '|' and reads nine fields: a pipe or a line break inside a field would break it.
+        assertEquals("Bandung", WeatherInfo.clean("  Bandung  "));
+        assertEquals("Kota Bandung", WeatherInfo.clean("Kota|Bandung"));
+        assertEquals("a b", WeatherInfo.clean("a\nb"));
+        assertEquals("New York", WeatherInfo.clean("New   York"));
+        assertEquals("", WeatherInfo.clean(null));
+        String[] fields = "Bandung|30|Light rain|34|65|11|42|Good|1792929600000".split("\\|", -1);
+        assertEquals(9, fields.length);
+    }
 }

@@ -22,6 +22,8 @@ public final class CardArtProvider extends ContentProvider {
 
     /** The path inside the provider's authority; the launcher reads exactly this. */
     static final String PATH = "card.png";
+    /** The weather line beside it, which the launcher shows under its date (the launcher's WeatherLine). */
+    static final String INFO_PATH = WeatherInfo.FILE;
 
     /** The drawing the provider serves, in this app's private storage. */
     static File art(Context ctx) {
@@ -39,18 +41,26 @@ public final class CardArtProvider extends ContentProvider {
         if (!("r".equals(mode) || "rt".equals(mode))) throw new FileNotFoundException("read only: " + uri);
         Context ctx = getContext();
         if (ctx == null || !serves(uri)) throw new FileNotFoundException("not the card art: " + uri);
-        return ParcelFileDescriptor.open(art(ctx), ParcelFileDescriptor.MODE_READ_ONLY);
+        File file = info(uri) ? new File(ctx.getFilesDir(), INFO_PATH) : art(ctx);
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
     @Override
     public String getType(Uri uri) {
-        return serves(uri) ? "image/png" : null;
+        if (!serves(uri)) return null;
+        return info(uri) ? "text/plain" : "image/png";
     }
 
-    /** True for the one path this provider serves, and for no other. */
+    /** True for the weather line's path. */
+    private static boolean info(Uri uri) {
+        String path = uri.getPath();
+        return path != null && path.equals("/" + INFO_PATH);
+    }
+
+    /** True for the two paths this provider serves, and for no other. */
     private static boolean serves(Uri uri) {
         String path = uri.getPath();
-        return path != null && path.equals("/" + PATH);
+        return path != null && (path.equals("/" + PATH) || path.equals("/" + INFO_PATH));
     }
 
     @Override

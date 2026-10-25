@@ -55,6 +55,7 @@ public final class WeatherActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_weather);
+        WeatherJob.schedule(this);   // the 30 minute reading for the launcher's line, from now on
         place = getSharedPreferences(PREFS, MODE_PRIVATE);
         forecastDays = Forecast.forecastDays(getResources().getInteger(R.integer.forecast_days));
         showHumidity = getResources().getBoolean(R.bool.show_humidity);
@@ -200,7 +201,8 @@ public final class WeatherActivity extends Activity {
         boolean units = fahrenheit;
         try {
             io.execute(() -> {
-                WeatherWidget.publish(this, r, name, units);
+                WeatherInfo.publish(this, r, name, units);   // the line under the launcher's date
+                WeatherWidget.publish(this, r, name, units);  // the tile's picture
                 WeatherWidget.invalidate(this);
             });
         } catch (RejectedExecutionException e) {
