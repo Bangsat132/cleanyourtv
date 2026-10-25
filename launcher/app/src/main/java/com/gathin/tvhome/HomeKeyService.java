@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.os.UserManager;
 import android.content.pm.PackageManager;
@@ -34,6 +35,9 @@ import java.util.Set;
  * With stock_home_redirect set, it also sends the stock launcher's home screen back here, for firmware that turns
  * that launcher on again after it was disabled (XGIMI's xrmservice does, on its own remote keys), or that cannot be
  * disabled at all, and a short press of Home opens this launcher even when the stock home is already on screen.
+ *
+ * With power_on_home set, a Live TV window (live_tv_package) that the firmware opens by itself at power-on is sent
+ * back here too, until the first key press after boot or after the screen turns on (Changhong / Homwee boards).
  *
  * Enable over adb:
  *   settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeKeyService
@@ -61,12 +65,24 @@ public class HomeKeyService extends AccessibilityService {
     private final Set<String> stockHome = new HashSet<>();
     /** stock_home_redirect, the stock launcher's package. */
     private String stockHomePackage = "";
+    /** power_on_home: the Live TV package to send back to Home, empty when off; armed until this uptime or a key. */
+    private String powerOnLiveTv = "";
+    private long powerOnUntil;
+    /** power_on_home: re-arms after the screen turns on; null unless the key is on. */
+    private BroadcastReceiver screenOnReceiver;
     /** Stops key filtering while a game controller is connected; null unless gamepad_passthrough and key_filter, or before the unlock. */
     private GamepadPassthrough gamepads;
+    /** Screen-off receiver while guard_off_in_standby is set; null otherwise. */
+    private BroadcastReceiver standbyExit;
+    /** disableSelf is how this service leaves for standby, not the user turning it off. */
+    private boolean steppingOut;
+    /** The bound helper, so the opt-in broadcast can arm it without waiting for a new connection. */
+    private static HomeKeyService running;
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        running = this;
         settingsScancodes = getResources().getIntArray(R.array.settings_key_scancodes);
         // The service is directBootAware: Android 11 skips a service that is not while the user is still
         // locked at boot, writes accessibility_enabled=0 and, on TCL G03 firmware, never binds it after the
@@ -97,12 +113,58 @@ public class HomeKeyService extends AccessibilityService {
         unlockReceiver = null;
     }
 
+    /** The opt-in broadcast: arm this binding now, or drop the receiver if the opt-in was turned off. */
+    static void applyStandbyOptIn() {
+        HomeKeyService service = running;
+        if (service == null) return;
+        if (GuardKeep.offInStandby(service)) service.armStandbyExit();
+        else service.disarmStandbyExit();
+    }
+
     @Override
     public void onDestroy() {
+        if (running == this) running = null;
         stopWaitingForUnlock();
+        if (screenOnReceiver != null) unregisterReceiver(screenOnReceiver);
+        if (standbyExit != null) {
+            try {
+                unregisterReceiver(standbyExit);
+            } catch (RuntimeException ignored) {
+            }
+            standbyExit = null;
+        }
         if (gamepads != null) gamepads.stop();
         if (consumeVolumeKeys) VolumeKeys.stop();
         super.onDestroy();
+    }
+
+    /** Some TCL boards never wake from the remote while this helper stays bound with the screen off. */
+    private void armStandbyExit() {
+        if (standbyExit != null || !GuardKeep.offInStandby(this)) return;
+        standbyExit = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (!Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) return;
+                leaveForStandby();
+            }
+        };
+        registerReceiver(standbyExit, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        PowerManager power = getSystemService(PowerManager.class);
+        if (power != null && !power.isInteractive()) leaveForStandby();
+    }
+
+    private void disarmStandbyExit() {
+        if (standbyExit == null) return;
+        try {
+            unregisterReceiver(standbyExit);
+        } catch (RuntimeException ignored) {
+        }
+        standbyExit = null;
+    }
+
+    private void leaveForStandby() {
+        steppingOut = true;
+        GuardKeep.stepOut(this);
     }
 
     private void loadConfig() {
@@ -126,13 +188,27 @@ public class HomeKeyService extends AccessibilityService {
                 stockHome.add(ri.activityInfo.name);
             }
         }
-        // home_key_service.xml subscribes to no events, so the redirect asks for window changes only when it is on.
+        // power_on_home, off by default. Not with boot_to_live_tv, or with Live TV picked as the Open on start app:
+        // those open Live TV on purpose at boot.
+        String openOnStart = config.openOnStartChoice
+                ? getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getString(OpenOnStart.KEY, "") : "";
+        powerOnLiveTv = config.powerOnHome && !config.bootToLiveTv && !config.liveTvPackage.equals(openOnStart)
+                ? config.liveTvPackage : "";
+        if (!powerOnLiveTv.isEmpty()) {
+            armPowerOnHome();
+        } else if (screenOnReceiver != null) {
+            unregisterReceiver(screenOnReceiver);
+            screenOnReceiver = null;
+            powerOnUntil = 0;
+        }
+        // home_key_service.xml subscribes to no events, so the redirects ask for window changes only when one is on.
         AccessibilityServiceInfo info = getServiceInfo();
-        if (info != null && !stockHome.isEmpty()) {
+        if (info != null && (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty())) {
             info.eventTypes |= AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
             setServiceInfo(info);
         }
-        if (!stockHome.isEmpty()) probeAtBoot();
+        if (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty()) probeAtBoot();
+        armStandbyExit();
         holdAppKeys = RemoteKeys.parseHoldAppKeys(config.appKeys);
         holdAppScancodes = RemoteKeys.parseHoldAppScancodes(config.appKeys);
         // gamepad_passthrough, off by default. Only with key_filter on: off, the service never filters keys.
@@ -151,6 +227,11 @@ public class HomeKeyService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        // power_on_home: the first key after power-on hands the TV to the user (power and wake keys don't count).
+        if (powerOnUntil != 0 && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getKeyCode() != KeyEvent.KEYCODE_POWER && event.getKeyCode() != KeyEvent.KEYCODE_WAKEUP) {
+            powerOnUntil = 0;
+        }
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
         // A scancode entry is more specific than any keycode, so it goes first.
         if (RemoteKeys.handle(this, event, appScancodes.get(event.getScanCode()),
@@ -182,16 +263,41 @@ public class HomeKeyService extends AccessibilityService {
     /** Unbound by Android: the user turned the helper off, so Home doesn't put it back (ServiceRepair). */
     @Override
     public boolean onUnbind(Intent intent) {
-        if (repairRecord) ServiceRepair.disconnected(this, getClass());
+        if (repairRecord && !steppingOut) ServiceRepair.disconnected(this, getClass());
         return super.onUnbind(intent);
     }
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        // power_on_home: the firmware opened Live TV by itself at power-on, before anyone pressed a key.
+        if (powerOnRedirect(powerOnLiveTv, event.getPackageName(), SystemClock.elapsedRealtime(), powerOnUntil)) {
+            openHome();
+            return;
+        }
         // stock_home_redirect: the firmware turned the stock launcher back on and its home screen came up.
-        if (stockHome.isEmpty() || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         CharSequence cls = event.getClassName();
-        if (cls != null && stockHome.contains(cls.toString())) openHome();
+        if (!stockHome.isEmpty() && cls != null && stockHome.contains(cls.toString())) openHome();
+    }
+
+    /** How long power_on_home stays armed after the screen turns on without a reboot. */
+    static final long SCREEN_ON_WINDOW_MS = 60 * 1000L;
+
+    /** power_on_home: armed for the boot window (if this bind is part of the boot) and after every screen-on. */
+    private void armPowerOnHome() {
+        if (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS) powerOnUntil = BOOT_WINDOW_MS;
+        if (screenOnReceiver != null) return;
+        screenOnReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                powerOnUntil = SystemClock.elapsedRealtime() + SCREEN_ON_WINDOW_MS;
+            }
+        };
+        registerReceiver(screenOnReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
+    }
+
+    static boolean powerOnRedirect(String liveTv, CharSequence pkg, long now, long armedUntil) {
+        return !liveTv.isEmpty() && pkg != null && liveTv.contentEquals(pkg) && now < armedUntil;
     }
 
     /** How long after boot the first bind still counts as "at boot" for probeAtBoot. */
