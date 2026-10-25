@@ -61,6 +61,7 @@ Set in `app/src/main/res/values/options.xml` before building. With the defaults 
 | Permission | Why |
 |---|---|
 | `INTERNET` | OpenWeatherMap: the place search, the weather now, the forecast and the air quality. |
+| `ACCESS_NETWORK_STATE` | The 30 minute job asks Android for a network before it runs; the system refuses to schedule it without this. No connection is inspected beyond that. |
 
 That is all. What is sent: the city name you type in the search, then that place's latitude and longitude for
 the weather and the air, plus your key with every call. No account on the TV, no telemetry, no ads, no

@@ -4,9 +4,11 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
-    <!-- The only permission: OpenWeatherMap, for the place search (its geocoding API), the weather and the air
-         quality. The API key travels as a request parameter, not as a permission. -->
+    <!-- Two permissions, both for the same thing: the reading. INTERNET for the calls themselves (the place search,
+         the weather, the air quality; the key travels as a request parameter), and ACCESS_NETWORK_STATE because the
+         30 minute job asks for a network before it runs, which Android refuses to schedule without it. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="false"

@@ -33,7 +33,13 @@ public final class WeatherJob extends JobService {
                 .setPeriodic(INTERVAL_MS)
                 .setPersisted(false)
                 .build();
-        scheduler.schedule(job);
+        try {
+            scheduler.schedule(job);
+        } catch (RuntimeException e) {
+            // A missing permission or a refusing firmware must not take the page down: the reading then comes only
+            // from the page itself, which still publishes the line each time it is opened.
+            android.util.Log.w("WeatherCard", "could not schedule the 30 minute reading: " + e);
+        }
     }
 
     @Override
