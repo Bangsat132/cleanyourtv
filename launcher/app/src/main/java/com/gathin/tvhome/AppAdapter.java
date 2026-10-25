@@ -9,16 +9,19 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -34,6 +37,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.io.BufferedInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -295,6 +300,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             // uniform_tiles draws the icon, so an app's banner is never loaded. A module card keeps its banner.
             if (!(uniformTiles && card == null)) {
                 banner = bundledBanner(appBanners.get(pkg));
+                // A card may also keep a picture it drew as a file and serve it through its own provider,
+                // read here, on the way to the front (docs/specs/card.md, "Live card art").
+                if (banner == null && card != null) banner = cardArt(ctx, pkg);
                 if (banner == null) banner = loadBanner(pm, ri);
             }
             // The icon is only drawn (and sampled for the glow) when there is no banner, so a tile with a
@@ -363,6 +371,55 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         if (banner == null) banner = ri.activityInfo.loadBanner(pm);
         // A square "banner" counts as none: the tile shows the app's icon and name instead of a blur.
         return banner != null && isBannerShaped(banner.getIntrinsicWidth(), banner.getIntrinsicHeight()) ? banner : null;
+    }
+
+    /** The live card art contract, in bytes in the file and pixels on the long side (docs/specs/card.md). */
+    private static final int CARD_ART_MAX_BYTES = 4096 * 1024, CARD_ART_MAX_WIDTH = 1024;
+    /** A live card picture is 16:9, like the tile; up to 2% off either way is still artwork, not a mistake. */
+    private static final double CARD_ART_ASPECT = 16d / 9d, CARD_ART_ASPECT_SLACK = 0.02d;
+
+    /**
+     * The live card art a module serves at {@code content://<package>.cardart/card.png}, or null for a card without
+     * a provider, one that exports none, or art the launcher will not draw (docs/specs/card.md, "Live card art").
+     * The read is bounded in bytes and the decode in size: a module is not a trusted source of a small picture.
+     */
+    static Drawable cardArt(Context ctx, String pkg) {
+        String uri = "content://" + pkg + ".cardart/card.png";
+        try {
+            // Two passes over one bounded stream: the header for the size, then the bitmap at a sampled size.
+            byte[] bytes = new byte[CARD_ART_MAX_BYTES];
+            int length = 0;
+            try (InputStream in = new BufferedInputStream(ctx.getContentResolver().openInputStream(Uri.parse(uri)), 16384)) {
+                if (in == null) return null;
+                int read;
+                while (length < bytes.length && (read = in.read(bytes, length, bytes.length - length)) > 0) length += read;
+                // Not a cap cut short: art past the limit, or a stream that goes on, is refused rather than shown cropped.
+                if (length == bytes.length && in.read() >= 0) return null;
+            }
+            BitmapFactory.Options size = new BitmapFactory.Options();
+            size.inJustDecodeBounds = true;
+            BitmapFactory.decodeByteArray(bytes, 0, length, size);
+            if (size.outWidth <= 0 || size.outHeight <= 0) return null;
+            int sample = 1;
+            while (size.outWidth / (sample * 2) >= CARD_ART_MAX_WIDTH) sample *= 2;
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            Bitmap full = BitmapFactory.decodeByteArray(bytes, 0, length, opts);
+            if (full == null || full.getWidth() <= 0 || full.getHeight() <= 0) return null;
+            double aspect = (double) full.getWidth() / full.getHeight();
+            if (full.getWidth() < full.getHeight()
+                    || aspect < CARD_ART_ASPECT * (1 - CARD_ART_ASPECT_SLACK)
+                    || aspect > CARD_ART_ASPECT * (1 + CARD_ART_ASPECT_SLACK)) {
+                full.recycle();
+                return null;
+            }
+            // The tile keeps and draws it for a while: not this method's to recycle.
+            return new BitmapDrawable(ctx.getResources(), full);
+        } catch (Exception | OutOfMemoryError e) {
+            // Not a failure of the card feature: the tile keeps the banner the module declared.
+            Log.w(Cards.TAG, "no live card art from " + pkg + ": " + e);
+            return null;
+        }
     }
 
     /**

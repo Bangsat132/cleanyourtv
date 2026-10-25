@@ -4,8 +4,47 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-/** The tables that turn Open-Meteo's numbers into words and colours. */
+/** The tables that turn OpenWeatherMap's numbers into words and colours. */
 public class ForecastTest {
+    @Test
+    public void openWeatherMapCodesLandInTheWmoSpace() {
+        assertEquals(95, Forecast.owmCode(200));   // thunderstorm with light rain
+        assertEquals(51, Forecast.owmCode(300));   // light drizzle
+        assertEquals(61, Forecast.owmCode(500));   // light rain
+        assertEquals(63, Forecast.owmCode(501));   // moderate rain
+        assertEquals(65, Forecast.owmCode(504));   // extreme rain
+        assertEquals(66, Forecast.owmCode(511));   // freezing rain
+        assertEquals(80, Forecast.owmCode(520));   // light shower rain
+        assertEquals(82, Forecast.owmCode(522));   // heavy shower rain
+        assertEquals(71, Forecast.owmCode(600));   // light snow
+        assertEquals(73, Forecast.owmCode(601));   // snow
+        assertEquals(75, Forecast.owmCode(602));   // heavy snow
+        assertEquals(66, Forecast.owmCode(611));   // sleet
+        assertEquals(85, Forecast.owmCode(620));   // light shower sleet
+        assertEquals(86, Forecast.owmCode(622));   // heavy shower snow
+        assertEquals(45, Forecast.owmCode(741));   // fog
+        assertEquals(95, Forecast.owmCode(781));   // tornado
+        assertEquals(0, Forecast.owmCode(800));    // clear
+        assertEquals(1, Forecast.owmCode(801));    // few clouds
+        assertEquals(2, Forecast.owmCode(802));    // scattered clouds
+        assertEquals(3, Forecast.owmCode(803));    // broken clouds
+        assertEquals(3, Forecast.owmCode(804));    // overcast
+        assertEquals(3, Forecast.owmCode(999));    // not a code OpenWeatherMap uses
+    }
+
+    @Test
+    public void aqiComesFromTheParticulatesOnTheUsScale() {
+        assertEquals(50, Forecast.usAqi(12.0, 0));
+        assertEquals(51, Forecast.usAqi(12.1, 0));
+        assertEquals(100, Forecast.usAqi(35.4, 0));
+        assertEquals(151, Forecast.usAqi(55.5, 0));
+        assertEquals(301, Forecast.usAqi(250.5, 0));
+        assertEquals(500, Forecast.usAqi(600, 0));
+        // The worse of the two reads decides: coarse dust beside clean air.
+        assertEquals(100, Forecast.usAqi(0, 154));
+        assertEquals(50, Forecast.usAqi(0, 54));
+    }
+
     @Test
     public void aqiBandsFollowTheUsScale() {
         assertEquals(0, Forecast.aqiBand(0));

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The card's static banner: the live card's own shape, drawn in vectors, shown until the add-on has drawn a reading
+     of its own (WeatherArt, WeatherWidget). Same sky as Forecast.backdrop for a clear day, the sun behind a cloud on
+     the left, and the five column strip the live card carries, as colour blocks rather than words: "SUHU  TERASA
+     LEMBAB  ANGIN  AQI". 16:9, drawn for this add-on, no third-party art. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="1600"
+    android:viewportHeight="900">
+
+    <!-- The sky: the page's clear day gradient, as three bands. -->
+    <path android:fillColor="#FF2A6AA8" android:pathData="M0,0h1600v420h-1600z" />
+    <path android:fillColor="#FF1C487A" android:pathData="M0,420h1600v240h-1600z" />
+    <path android:fillColor="#FF0A1626" android:pathData="M0,660h1600v240h-1600z" />
+
+    <!-- The sun behind a cloud, on the left, where the live card puts the temperature. -->
+    <path android:fillColor="#FFFFC94A" android:pathData="M520,130m-110,0a110,110 0,1 1,220 0a110,110 0,1 1,-220 0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M240,360h300a70,70 0,0 0,0 -140a96,96 0,0 0,-180 -34a76,76 0,0 0,-120 60a58,58 0,0 0,0 114z" />
+
+    <!-- The temperature's weight: light bars where the degree figures and the small line sit. -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M90,450h300v30h-300z" />
+    <path android:fillColor="#CCFFFFFF" android:pathData="M90,510h200v22h-200z" />
+
+    <!-- The air quality pill, in the good band's green, at the top right. -->
+    <path android:fillColor="#E643A047" android:pathData="M1220,92h300a35,35 0,0 1,0 70h-300a35,35 0,0 1,0 -70z" />
+
+    <!-- The five column strip: hairline over it, four separators, a label bar and a value bar per column. -->
+    <path android:fillColor="#33FFFFFF" android:pathData="M80,594h1440v2h-1440z" />
+    <path android:fillColor="#33FFFFFF" android:pathData="M368,620h2v210h-2z" />
+    <path android:fillColor="#33FFFFFF" android:pathData="M656,620h2v210h-2z" />
+    <path android:fillColor="#33FFFFFF" android:pathData="M944,620h2v210h-2z" />
+    <path android:fillColor="#33FFFFFF" android:pathData="M1232,620h2v210h-2z" />
+    <path android:fillColor="#99FFFFFF" android:pathData="M106,646h120v16h-120z" />
+    <path android:fillColor="#99FFFFFF" android:pathData="M394,646h150v16h-150z" />
+    <path android:fillColor="#99FFFFFF" android:pathData="M682,646h150v16h-150z" />
+    <path android:fillColor="#99FFFFFF" android:pathData="M970,646h130v16h-130z" />
+    <path android:fillColor="#99FFFFFF" android:pathData="M1258,646h90v16h-90z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M106,712h140v52h-140z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M394,712h120v52h-120z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M682,712h140v52h-140z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M970,712h90v52h-90z" />
+    <path android:fillColor="#FF43A047" android:pathData="M1258,712h90v52h-90z" />
+</vector>

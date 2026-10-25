@@ -102,6 +102,44 @@ any violation drops that one card, with a log line and no other effect.
 | Attributes on `<card>` | 16 |
 | Label and caption length | 24 and 32 characters, checked before anything else looks at the value |
 | Signers | exactly one signing certificate; a package with several is rejected |
+| Live card art, the file served by a card's provider | 4096 KB; larger art is not drawn |
+
+### Live card art
+
+Optional, and an addition to spec 1 rather than a change to it: a card without a provider is read and drawn
+exactly as before, so nothing below is required of a module.
+
+A module whose tile shows a picture it draws at runtime (a temperature, a count, a poster of the day) cannot
+put that picture in its resources, and the launcher cannot read the module's private files. The one channel
+without a permission on either side is a provider the module exports:
+
+```xml
+<provider
+    android:name=".CardArtProvider"
+    android:authorities="${applicationId}.cardart"
+    android:exported="true"
+    android:grantUriPermissions="false" />
+```
+
+Rules for the provider:
+
+- The authority is the module's package name plus `.cardart` (`${applicationId}` in its build, so a package
+  renamed by a build variant still matches the package the launcher knows). Any other authority is not read.
+- It serves exactly one URI, `content://<package>.cardart/card.png`, opened read only. One PNG, at most
+  4096 KB in the file. Anything else, an unreadable file or no file at all, fails the read.
+- The picture is 16:9, as the tile is: it is drawn only when it is wider than it is tall and its aspect is
+  16:9 to within 2%. A provider is refused art it would show as a blur or a crop.
+- The launcher decodes it at no more than 1024 px wide (`inSampleSize`), from the header first, so a large PNG
+  costs no more than a large banner.
+- It is read when the tiles are built: when the home screen comes to the front and packages changed while it
+  was away, at first start, and after an app is installed or removed. It is not polled and nothing watches the
+  file, so a new picture is drawn the next time Home comes back with a reason to rebuild the tiles.
+- Any failure (no provider, no permission to read it, no file, art of the wrong shape, a decode that fails or
+  runs out of memory) is one line under `TvHomeCards` and the declared banner is drawn, as a card without
+  provider is. A module's live art can never take the home screen down.
+
+The provider needs no permission and grants none: the launcher declares no permissions at all, so a provider
+that asked for one could not be read by it. What it exposes is that one PNG, read only.
 
 ## Launcher behaviour
 

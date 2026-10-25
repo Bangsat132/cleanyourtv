@@ -12,4 +12,8 @@
     <string name="temperature_unit" translatable="false">c</string>
     <!-- The temperature now in the other unit too, at the start of the "Feels like" line ("22°C · Feels like 70°"). -->
     <bool name="show_both_units">false</bool>
+    <!-- No OpenWeatherMap key is set here: app/build.gradle injects it as the string resource weather_api_key and as
+         BuildConfig.WEATHER_API_KEY, from the Gradle property or environment variable OPENWEATHER_API_KEY, and falls
+         back to PLACEHOLDER. With PLACEHOLDER the app shows the "no key" message instead of fetching. Set the key
+         where the build runs, never in a file that is committed. -->
 </resources>

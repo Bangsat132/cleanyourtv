@@ -60,7 +60,34 @@ The launcher targets TVs with 1 GB of RAM, and the owners trust what they put on
 - Use your own art. Do not use other companies' logos as your banner or icon.
 - Describe every permission you request in your README.
 
-## 3. Test on a TV
+## 3. A picture you draw yourself
+
+Optional. A card's artwork is its activity's `android:banner`, a resource packed into the APK. If your tile
+changes while the app runs, a picture drawn at runtime, you can publish it too: declare a provider, and the
+launcher reads the PNG it serves instead of the banner.
+
+```xml
+<provider
+    android:name=".CardArtProvider"
+    android:authorities="${applicationId}.cardart"
+    android:exported="true"
+    android:grantUriPermissions="false" />
+```
+
+The provider serves exactly one URI, `content://<your package>.cardart/card.png`, read only: open the file
+you wrote in `getFilesDir()` and return a `ParcelFileDescriptor` from `openFile`, `image/png` from `getType`,
+and nothing for anything else (`docs/specs/card.md`, "Live card art", has the contract). Keep the file a 16:9
+PNG under 4096 KB; the launcher draws nothing else, because a tile is 16:9 and a picture of another shape
+would be cropped or blurred.
+
+Keep your `android:banner` as it is. It is what the tile shows until the first picture is published, and what
+it falls back to whenever the read fails, so a card without a provider, or with one that has nothing to serve
+yet, looks exactly as it does today. The launcher reads the file when it builds its tiles, which is when Home
+comes to the front and something changed while it was away: there is no need to wake the TV for it, and no
+service or broadcast is involved. Do not ask for a permission on the provider: the launcher holds none, so a
+protected provider would simply not be read.
+
+## 4. Test on a TV
 
 Install over ADB, press Home, and the prompt appears:
 
@@ -86,7 +113,7 @@ Module cards list, set it to Shown, and check the card takes the tile's place; p
 and check your app opens; uninstall and check the card is gone. Take a screenshot of the card
 focused in the grid for your README.
 
-## 4. Release and keep your key
+## 5. Release and keep your key
 
 The owner's answer is pinned to your signing certificate. Publish the certificate digest with every
 release so people can check what they install:

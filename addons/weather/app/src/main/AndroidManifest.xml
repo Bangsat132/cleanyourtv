@@ -4,7 +4,8 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
-    <!-- The only permission: Open-Meteo, for the place search, the weather and the air quality. -->
+    <!-- The only permission: OpenWeatherMap, for the place search (its geocoding API), the weather and the air
+         quality. The API key travels as a request parameter, not as a permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -15,6 +16,8 @@
         android:supportsRtl="false"
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
 
+        <!-- The full-screen page. Its own LEANBACK_LAUNCHER filter stays: it is the entry point when the add-on is
+             opened from the app library, while the card below stands in for the tile on Home. -->
         <activity
             android:name=".WeatherActivity"
             android:exported="true"
@@ -23,12 +26,44 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-            <!-- Clean Your TV module card (docs/specs/card.md): the tile shows as "Weather" once the owner says Show. -->
+        </activity>
+
+        <!-- The card activity exists for the launcher tile: a card's picture is its activity's banner, so the tile is
+             drawn from the last reading (WeatherArt, WeatherWidget). It has to sit on an activity with MAIN and
+             LEANBACK_LAUNCHER that is exported, enabled and the only card in the package (docs/specs/card.md); a
+             package with two cards gets only the first one read. Launching it opens the weather page; it does nothing
+             else. The static placeholder is the tile until a reading has been drawn, so an un-refreshed Home never
+             shows a blur. -->
+        <activity
+            android:name=".CardActivity"
+            android:banner="@drawable/card_banner_placeholder"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- This filter and the meta-data line below are the card itself (docs/specs/card.md): MAIN plus the
+                 launcher's card category, and the XML it reads through the package manager. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="com.gathin.tvhome.category.DOCK_CARD" />
             </intent-filter>
-            <meta-data android:name="com.gathin.tvhome.card" android:resource="@xml/module_card" />
+            <meta-data
+                android:name="com.gathin.tvhome.card"
+                android:resource="@xml/module_card" />
         </activity>
+
+        <!-- The picture drawn from the last reading, for the tile (docs/specs/card.md, "Live card art"). The launcher
+             can read neither this app's files nor, without a permission, anything it does not publish, so it opens
+             content://<applicationId>.cardart/card.png here and draws the PNG; when the read fails it keeps the card's
+             banner above. Read only, one path, no permission, no grant: nothing here can be written or listed. -->
+        <provider
+            android:name=".CardArtProvider"
+            android:authorities="${applicationId}.cardart"
+            android:exported="true"
+            android:grantUriPermissions="false" />
     </application>
 </manifest>

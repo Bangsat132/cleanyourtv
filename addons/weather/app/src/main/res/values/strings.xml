@@ -10,10 +10,11 @@
     <string name="other_unit_f">%1$d°F</string>
     <string name="high_low">%1$d° / %2$d°</string>
     <string name="aqi_line">Air quality %1$d · %2$s</string>
-    <string name="updated">Updated %1$s · Open-Meteo</string>
+    <string name="updated">Updated %1$s · OpenWeatherMap</string>
     <string name="change_city">Change city</string>
     <string name="loading">Loading the weather…</string>
-    <string name="offline">Can\'t reach Open-Meteo. Check the TV\'s internet connection; it tries again in 5 minutes.</string>
+    <string name="offline">Can\'t reach OpenWeatherMap. Check the TV\'s internet connection; it tries again in 5 minutes.</string>
+    <string name="no_key">No OpenWeatherMap API key in this build. See addons/weather/README.md to add one.</string>
 
     <string name="pick_title">Which city?</string>
     <string name="pick_hint">City name, e.g. Ulaanbaatar</string>

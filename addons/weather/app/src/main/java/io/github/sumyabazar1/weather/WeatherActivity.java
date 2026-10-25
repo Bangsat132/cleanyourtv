@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.text.format.DateFormat;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -23,11 +24,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
- * The weather for one place, full screen: now, the air quality and the next days (options.xml). It reads Open-Meteo only
- * while it is on screen (every {@link Forecast#REFRESH_MS}, or {@link Forecast#RETRY_MS} after a failure) and
- * does nothing in the background. The place is chosen once with a search and kept in the app's preferences.
+ * The weather for one place, full screen: now, the air quality and the next days (options.xml). It reads
+ * OpenWeatherMap only while it is on screen (every {@link Forecast#REFRESH_MS}, or {@link Forecast#RETRY_MS} after a
+ * failure) and does nothing in the background. The place is chosen once with a search and kept in the app's
+ * preferences. Without an API key in the build ({@link Forecast#hasKey()}) it says so and touches the network not at all.
  */
 public final class WeatherActivity extends Activity {
     private static final String PREFS = "place";
@@ -64,6 +67,10 @@ public final class WeatherActivity extends Activity {
         View changeCity = findViewById(R.id.changeCity);
         changeCity.setOnClickListener(v -> pickCity());
         changeCity.requestFocus();
+        if (!Forecast.hasKey()) {
+            noKey();   // nothing to search with, nothing to fetch: say so once and leave the page still
+            return;
+        }
         if (!place.contains("name")) {
             message.setText(R.string.pick_first);
             pickCity();
@@ -73,7 +80,7 @@ public final class WeatherActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (place.contains("name")) refresh();
+        if (place.contains("name") && Forecast.hasKey()) refresh();
     }
 
     @Override
@@ -90,6 +97,10 @@ public final class WeatherActivity extends Activity {
 
     private void refresh() {
         main.removeCallbacks(tick);
+        if (!Forecast.hasKey()) {   // no key: no request, and no retry that would ask again
+            noKey();
+            return;
+        }
         double lat = Double.longBitsToDouble(place.getLong("lat", 0));
         double lon = Double.longBitsToDouble(place.getLong("lon", 0));
         io.execute(() -> {
@@ -175,10 +186,43 @@ public final class WeatherActivity extends Activity {
                 .setText(getString(R.string.updated, DateFormat.getTimeFormat(this).format(new Date())));
         message.setVisibility(View.GONE);
         content.setVisibility(View.VISIBLE);
+        publishCard(r);
+    }
+
+    /**
+     * The launcher tile: the page just read the weather, so its card is drawn again — the picture, then the package
+     * manager told to look at it. Both block (drawing and encoding a 1600 x 900 bitmap), so they run on the page's own
+     * io thread, the one the fetch already uses, and the page no longer holds it when the work starts.
+     */
+    private void publishCard(Forecast.Report r) {
+        if (isFinishing() || isDestroyed()) return;
+        String name = place.getString("name", "");
+        boolean units = fahrenheit;
+        try {
+            io.execute(() -> {
+                WeatherWidget.publish(this, r, name, units);
+                WeatherWidget.invalidate(this);
+            });
+        } catch (RejectedExecutionException e) {
+            Log.i("WeatherCard", "the page closed before the card could be drawn; the next opening draws it");
+        }
+    }
+
+    /**
+     * The key is PLACEHOLDER, or the build had none: say where it comes from, keep the last good page if there is one,
+     * and schedule nothing. The page still refreshes by itself if a keyed build is installed over this one.
+     */
+    private void noKey() {
+        main.removeCallbacks(tick);
+        if (!shown) message.setText(R.string.no_key);
     }
 
     /** Type a city, pick it from the matches, keep it. Back leaves the current place as it was. */
     private void pickCity() {
+        if (!Forecast.hasKey()) {
+            noKey();
+            return;
+        }
         EditText name = new EditText(this);
         name.setSingleLine(true);
         name.setHint(R.string.pick_hint);
@@ -205,6 +249,10 @@ public final class WeatherActivity extends Activity {
     }
 
     private void search(String typed) {
+        if (!Forecast.hasKey()) {
+            noKey();
+            return;
+        }
         if (typed.trim().isEmpty()) {
             pickCity();
             return;

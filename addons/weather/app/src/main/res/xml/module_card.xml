@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<card spec="1" label="Weather" caption="Forecast and air quality" accent="#4A90D9" />
+<!-- The launcher's card (docs/specs/card.md, spec 1): literal text only, no @string references. The caption says the
+     picture is rebuilt: the tile is drawn again from the last reading each time the page is opened. -->
+<card spec="1" label="Weather" caption="Rebuilt from last reading" accent="#4A90D9" />

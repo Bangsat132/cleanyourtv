@@ -45,6 +45,9 @@ jobs:
       - name: Unit tests and release build
         env:
           ADDON: ${{ inputs.addon }}
+          # An add-on that needs a key of its own reads it from here (the weather add-on's
+          # OPENWEATHER_API_KEY). Unset, its build still succeeds and the app says the key is missing.
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: |
           cd "addons/$ADDON"
           chmod +x gradlew

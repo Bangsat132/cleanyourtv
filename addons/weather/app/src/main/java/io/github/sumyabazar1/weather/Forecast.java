@@ -20,9 +20,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Open-Meteo, which needs no key: the place search, the weather now and for the next days, and the US air
- * quality index. The only thing sent is the place name typed in the search, then that place's latitude and
- * longitude. Every call blocks, so WeatherActivity makes them off the UI thread.
+ * OpenWeatherMap, with an API key from the build ({@code BuildConfig.WEATHER_API_KEY}): the place search, the
+ * weather now and for the next days, and the air quality read turned into the US air quality index. The only thing
+ * sent is the place name typed in the search, then that place's latitude and longitude. Every call blocks, so
+ * WeatherActivity makes them off the UI thread.
  */
 final class Forecast {
     static final long REFRESH_MS = 30 * 60_000L;
@@ -30,6 +31,8 @@ final class Forecast {
     private static final int TIMEOUT_MS = 8_000;
     /** Days after today the forecast row can show (options.xml, forecast_days). */
     static final int MIN_DAYS = 3, MAX_DAYS = 7;
+
+    private static final String API = "https://api.openweathermap.org";
 
     private Forecast() { }
 
@@ -92,19 +95,25 @@ final class Forecast {
         }
     }
 
-    /** Up to five places matching what was typed, best match first. Empty when nothing matches. */
+    /** False when the build carries no OpenWeatherMap key, so nothing is fetched. */
+    static boolean hasKey() {
+        String key = BuildConfig.WEATHER_API_KEY;
+        return key != null && !key.trim().isEmpty() && !"PLACEHOLDER".equals(key.trim());
+    }
+
+    /** Up to five places matching what was typed, best match first. Empty when nothing matches or there is no key. */
     static List<Place> search(String name) throws IOException, JSONException {
-        JSONObject reply = get("https://geocoding-api.open-meteo.com/v1/search?count=5&format=json&name="
-                + URLEncoder.encode(name.trim(), "UTF-8") + "&language=" + Locale.getDefault().getLanguage());
         List<Place> out = new ArrayList<>();
-        JSONArray results = reply.optJSONArray("results");
+        if (!hasKey()) return out;
+        JSONArray results = get(API + "/geo/1.0/direct?q=" + URLEncoder.encode(name.trim(), "UTF-8")
+                + "&limit=5&appid=" + key());
         if (results == null) return out;
         for (int i = 0; i < results.length(); i++) {
             JSONObject r = results.getJSONObject(i);
-            StringBuilder detail = new StringBuilder(r.optString("admin1"));
+            StringBuilder detail = new StringBuilder(r.optString("state"));
             String country = r.optString("country");
             if (!country.isEmpty()) detail.append(detail.length() > 0 ? ", " : "").append(country);
-            out.add(new Place(r.getString("name"), detail.toString(), r.getDouble("latitude"), r.getDouble("longitude")));
+            out.add(new Place(r.getString("name"), detail.toString(), r.getDouble("lat"), r.getDouble("lon")));
         }
         return out;
     }
@@ -116,24 +125,35 @@ final class Forecast {
 
     /**
      * The weather and air quality at a place, with this many days after today. The air quality is a separate
-     * service: if it fails, aqi is -1.
+     * call: if it fails, aqi is -1.
      */
     static Report fetch(double latitude, double longitude, int days) throws IOException, JSONException {
-        String where = String.format(Locale.ROOT, "latitude=%.4f&longitude=%.4f", latitude, longitude);
-        // DWD's ICON model: Open-Meteo's default blend called light snow over Ulaanbaatar "overcast" while ICON,
-        // and Google, had snow falling.
-        JSONObject reply = get("https://api.open-meteo.com/v1/forecast?" + where + "&models=icon_seamless"
-                + "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,is_day,wind_speed_10m"
-                + "&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days="
-                + (forecastDays(days) + 1));
-        JSONObject current = reply.getJSONObject("current");
-        double temp = current.getDouble("temperature_2m");
-        double humidity = current.getDouble("relative_humidity_2m");
-        int code = snowIfCold(current.getInt("weather_code"), temp, humidity);
-        return new Report(temp, current.getDouble("apparent_temperature"),
-                code, current.getInt("is_day") == 1,
-                days(reply.getJSONObject("daily")), aqiOrUnknown(where),
-                (int) Math.round(humidity), (int) Math.round(current.optDouble("wind_speed_10m", 0)));
+        if (!hasKey()) throw new IOException("no key");
+        String where = String.format(Locale.ROOT, "lat=%.4f&lon=%.4f", latitude, longitude);
+        JSONObject now = get(API + "/data/2.5/weather?" + where + "&units=metric&appid=" + key());
+        JSONObject main = now.getJSONObject("main");
+        double temp = main.getDouble("temp");
+        double humidity = main.optDouble("humidity", 0);
+        JSONObject today = now.optJSONArray("weather") == null || now.optJSONArray("weather").length() == 0
+                ? null : now.optJSONArray("weather").optJSONObject(0);
+        int code = snowIfCold(owmCode(today == null ? 800 : today.optInt("id", 800)), temp, humidity);
+        JSONObject wind = now.optJSONObject("wind");
+        double metresPerSecond = wind == null ? 0 : wind.optDouble("speed", 0);
+        return new Report(temp, main.optDouble("feels_like", temp),
+                code, isDay(now),
+                days(get(API + "/data/2.5/forecast?" + where + "&units=metric&appid=" + key()), forecastDays(days)),
+                aqiOrUnknown(where),
+                (int) Math.round(humidity), (int) Math.round(metresPerSecond * 3.6));
+    }
+
+    /** Day when now falls between the place's local sunrise and sunset, night otherwise. */
+    private static boolean isDay(JSONObject now) {
+        JSONObject sys = now.optJSONObject("sys");
+        if (sys == null) return true;
+        long sunrise = sys.optLong("sunrise", 0), sunset = sys.optLong("sunset", 0);
+        if (sunrise == 0 && sunset == 0) return true;
+        long at = now.optLong("dt", 0) == 0 ? System.currentTimeMillis() / 1000 : now.optLong("dt");
+        return at >= sunrise && at <= sunset;
     }
 
     /**
@@ -158,32 +178,130 @@ final class Forecast {
                 + 0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) - 4.686035;
     }
 
-    /** Tomorrow and the days after it; today (index 0) is the current reading. */
-    private static List<Day> days(JSONObject daily) throws JSONException {
-        JSONArray dates = daily.getJSONArray("time");
-        JSONArray codes = daily.getJSONArray("weather_code");
-        JSONArray max = daily.getJSONArray("temperature_2m_max");
-        JSONArray min = daily.getJSONArray("temperature_2m_min");
+    /** OpenWeatherMap's condition id, into the WMO code the words and colours are written for. */
+    static int owmCode(int id) {
+        if (id >= 200 && id <= 232) return 95;
+        if (id >= 300 && id <= 321) return 51;
+        if (id == 500) return 61;
+        if (id == 501) return 63;
+        if (id >= 502 && id <= 504) return 65;
+        if (id == 511) return 66;
+        if (id == 520 || id == 521) return 80;
+        if (id == 522 || id == 531) return 82;
+        if (id == 600) return 71;
+        if (id == 601) return 73;
+        if (id == 602) return 75;
+        if (id >= 611 && id <= 616) return 66;
+        if (id == 620 || id == 621) return 85;
+        if (id == 622) return 86;
+        if (id == 701 || id == 711 || id == 721 || id == 731 || id == 741 || id == 751 || id == 761
+                || id == 762 || id == 771) return 45;
+        if (id == 781) return 95;
+        if (id == 800) return 0;
+        if (id == 801) return 1;
+        if (id == 802) return 2;
+        if (id == 803 || id == 804) return 3;
+        return 3;
+    }
+
+    /** Tomorrow and the days after it; today (index 0) is the current reading. Never more than the option asks. */
+    private static List<Day> days(JSONObject reply, int wanted) throws JSONException {
+        JSONArray list = reply.optJSONArray("list");
         List<Day> out = new ArrayList<>();
-        for (int i = 1; i < dates.length(); i++) {
-            // With forecast_days 7 the last day can come back without values: stop there instead of failing the page.
-            if (codes.isNull(i) || max.isNull(i) || min.isNull(i)) break;
-            // A day whose high stays near freezing gets the same rain-to-snow correction, with the high and
-            // saturated air, which is the warm end of the day's precipitation.
-            out.add(new Day(LocalDate.parse(dates.getString(i)), snowIfCold(codes.getInt(i), max.getDouble(i), 100),
-                    max.getDouble(i), min.getDouble(i)));
+        if (list == null) return out;
+        long zone = reply.optJSONObject("city") == null ? 0 : reply.optJSONObject("city").optLong("timezone", 0);
+        LocalDate today = LocalDate.now(java.time.ZoneOffset.ofTotalSeconds((int) zone));
+        // The steps of one local day, walked in order, so a gap in the three-hour steps still gives one day.
+        LocalDate day = null;
+        int code = 0;
+        double max = 0, min = 0;
+        long nearest = Long.MAX_VALUE;
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject step = list.optJSONObject(i);
+            if (step == null) continue;
+            long at = step.optLong("dt", 0) + zone;
+            LocalDate on = LocalDate.ofEpochDay(Math.floorDiv(at, 86400L));
+            if (on.isBefore(today) || on.isEqual(today)) continue;
+            JSONObject main = step.optJSONObject("main");
+            if (main == null) continue;
+            double temp = main.getDouble("temp");
+            if (!on.equals(day)) {
+                if (day != null) {
+                    out.add(new Day(day, snowIfCold(code, max, 100), max, min));
+                    if (out.size() >= wanted) return out;
+                }
+                day = on;
+                code = 0;
+                max = min = temp;
+                nearest = Long.MAX_VALUE;
+            } else {
+                max = Math.max(max, temp);
+                min = Math.min(min, temp);
+            }
+            // The step nearest local midday says what the day is: fair weather in the morning does not.
+            long toNoon = Math.abs(Math.floorMod(at, 86400L) - 43200L);
+            if (toNoon < nearest) {
+                nearest = toNoon;
+                JSONArray weather = step.optJSONArray("weather");
+                code = weather == null || weather.length() == 0 ? 3
+                        : owmCode(weather.optJSONObject(0) == null ? 3 : weather.optJSONObject(0).optInt("id", 800));
+            }
         }
+        if (day != null && out.size() < wanted) out.add(new Day(day, snowIfCold(code, max, 100), max, min));
         return out;
     }
 
+    /** The air quality read, as a US AQI; -1 when it fails or has no reading. */
     private static int aqiOrUnknown(String where) {
         try {
-            JSONObject current = get("https://air-quality-api.open-meteo.com/v1/air-quality?" + where
-                    + "&current=us_aqi").getJSONObject("current");
-            return current.isNull("us_aqi") ? -1 : current.getInt("us_aqi");
-        } catch (IOException | JSONException e) {
+            JSONArray list = get(API + "/data/2.5/air_pollution?" + where + "&appid=" + key()).optJSONArray("list");
+            if (list == null || list.length() == 0) return -1;
+            JSONObject components = list.optJSONObject(0) == null ? null
+                    : list.optJSONObject(0).optJSONObject("components");
+            if (components == null || !components.has("pm2_5") || !components.has("pm10")) return -1;
+            return usAqi(components.getDouble("pm2_5"), components.getDouble("pm10"));
+        } catch (IOException | JSONException | RuntimeException e) {
             return -1;
         }
+    }
+
+    /**
+     * A US AQI from the two particulates: each one's breakpoints on the US EPA scale, the worse of the two. Open
+     * WeatherMap's own index is a 1 to 5 band, too coarse for the page, so it is not used.
+     */
+    static int usAqi(double pm25, double pm10) {
+        return Math.max(pm25Aqi(pm25), pm10Aqi(pm10));
+    }
+
+    private static int pm25Aqi(double v) {
+        if (v <= 12.0) return upTo(v, 0, 12.0, 0, 50);
+        if (v <= 35.4) return upTo(v, 12.1, 35.4, 51, 100);
+        if (v <= 55.4) return upTo(v, 35.5, 55.4, 101, 150);
+        if (v <= 150.4) return upTo(v, 55.5, 150.4, 151, 200);
+        if (v <= 250.4) return upTo(v, 150.5, 250.4, 201, 300);
+        if (v <= 500.4) return upTo(v, 250.5, 500.4, 301, 500);
+        return 500;
+    }
+
+    private static int pm10Aqi(double v) {
+        if (v <= 54) return upTo(v, 0, 54, 0, 50);
+        if (v <= 154) return upTo(v, 55, 154, 51, 100);
+        if (v <= 254) return upTo(v, 155, 254, 101, 150);
+        if (v <= 354) return upTo(v, 255, 354, 151, 200);
+        if (v <= 424) return upTo(v, 355, 424, 201, 300);
+        if (v <= 604) return upTo(v, 425, 604, 301, 500);
+        return 500;
+    }
+
+    /** Linear between the band's ends: the reading's share of the band, spread over the band's index. */
+    private static int upTo(double v, double low, double high, int indexLow, int indexHigh) {
+        double share = high > low ? (v - low) / (high - low) : 1;
+        return (int) Math.round(indexLow + Math.max(0, Math.min(1, share)) * (indexHigh - indexLow));
+    }
+
+    /** The key, for a URL; only called once {@link #hasKey} says there is one. */
+    private static String key() {
+        return BuildConfig.WEATHER_API_KEY == null ? "" : BuildConfig.WEATHER_API_KEY.trim();
     }
 
     private static JSONObject get(String url) throws IOException, JSONException {
@@ -200,7 +318,7 @@ final class Forecast {
         }
     }
 
-    /** Whole degrees for the page: Celsius as read, or Fahrenheit converted before rounding (options.xml temperature_unit). */
+    /** Whole degrees for the page: Celsius as read, or Fahrenheit converted first (options.xml temperature_unit). */
     static int degrees(double celsius, boolean fahrenheit) {
         return (int) Math.round(fahrenheit ? celsius * 9 / 5 + 32 : celsius);
     }

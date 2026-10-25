@@ -2,3 +2,8 @@
 build/
 app/build/
 local.properties
+
+# Signing material, and the file that would otherwise hold the OpenWeatherMap key.
+*.keystore
+*.jks
+keystore.properties

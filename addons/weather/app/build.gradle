@@ -11,7 +11,20 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 1
-        versionName '1.0'
+        versionName '1.1-owm'
+
+        // The OpenWeatherMap key, from the Gradle property or the environment variable OPENWEATHER_API_KEY, and
+        // PLACEHOLDER when neither is set so the build never fails and a key never lives in a tracked file:
+        //   ./gradlew assembleDebug -POPENWEATHER_API_KEY=...   or   OPENWEATHER_API_KEY=... ./gradlew assembleDebug
+        // It reaches the app as the string resource weather_api_key and as BuildConfig.WEATHER_API_KEY.
+        def owmKey = (project.findProperty('OPENWEATHER_API_KEY') ?: System.getenv('OPENWEATHER_API_KEY') ?: 'PLACEHOLDER').toString().trim()
+        if (!owmKey) owmKey = 'PLACEHOLDER'
+        resValue 'string', 'weather_api_key', owmKey
+        buildConfigField 'String', 'WEATHER_API_KEY', '"' + owmKey + '"'
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
