@@ -105,7 +105,7 @@ final class Forecast {
     static List<Place> search(String name) throws IOException, JSONException {
         List<Place> out = new ArrayList<>();
         if (!hasKey()) return out;
-        JSONArray results = get(API + "/geo/1.0/direct?q=" + URLEncoder.encode(name.trim(), "UTF-8")
+        JSONArray results = getArray(API + "/geo/1.0/direct?q=" + URLEncoder.encode(name.trim(), "UTF-8")
                 + "&limit=5&appid=" + key());
         if (results == null) return out;
         for (int i = 0; i < results.length(); i++) {
@@ -305,14 +305,32 @@ final class Forecast {
     }
 
     private static JSONObject get(String url) throws IOException, JSONException {
+        return new JSONObject(body(url));
+    }
+
+    /** A reply whose root is an array, as the place search's is; null when the reply is empty or not an array. */
+    private static JSONArray getArray(String url) throws IOException, JSONException {
+        String text = body(url).trim();
+        return text.isEmpty() ? null : new JSONArray(text);
+    }
+
+    private static String body(String url) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setConnectTimeout(TIMEOUT_MS);
         connection.setReadTimeout(TIMEOUT_MS);
-        try (InputStream in = connection.getInputStream()) {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buffer = new byte[4096];
-            for (int n; (n = in.read(buffer)) != -1; ) out.write(buffer, 0, n);
-            return new JSONObject(new String(out.toByteArray(), StandardCharsets.UTF_8));
+        try {
+            int status = connection.getResponseCode();
+            InputStream in = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            if (in == null) throw new IOException("HTTP " + status + " from OpenWeatherMap");
+            try (InputStream stream = in) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buffer = new byte[4096];
+                for (int n; (n = stream.read(buffer)) != -1; ) out.write(buffer, 0, n);
+                String text = new String(out.toByteArray(), StandardCharsets.UTF_8);
+                // A wrong, unconfirmed or spent key answers 401 with {"cod":401,...}: say so instead of a parse error.
+                if (status >= 400) throw new IOException("HTTP " + status + " from OpenWeatherMap: " + text);
+                return text;
+            }
         } finally {
             connection.disconnect();
         }
