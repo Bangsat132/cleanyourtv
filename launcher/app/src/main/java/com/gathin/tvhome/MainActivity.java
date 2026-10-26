@@ -427,7 +427,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // black under it is a second full-screen fill on every frame for nothing. The starting window still uses
         // the theme's background, so launch looks the same.
         getWindow().setBackgroundDrawable(null);
-        wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
+        wallpaperPlayer = new WallpaperPlayer(this, root, cfg, this::shownCardPackages);
         sky = findViewById(R.id.sky);
         sky.setIntensity(cfg.skyIntensity);
         glass = findViewById(R.id.glass);
@@ -1102,6 +1102,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         cards = moduleCards ? CardFeature.run(() -> Cards.discover(this, hiddenApps,
                 () -> Cards.load(Cards.storeFile(this)), leanback), none) : none;
         adapter.reload(cards.isEmpty() ? none : CardFeature.run(() -> Cards.shown(cards), none), leanback);
+        // A card that publishes a picture (live_wallpaper) is only known now: ask again so Home picks it up at once
+        // instead of on the next 30 minute tick.
+        wallpaperPlayer.update();
         lastFocusedKey = returnKey;
         lastFocused = returnSlot;
         packageSequence = currentPackageSequence(packageSequence);
@@ -2508,6 +2511,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * publishes nothing and the line stays hidden. Read on the UI thread, as it is a provider file of a few hundred
      * bytes in this TV's own storage, and only every {@link #WEATHER_REFRESH_MS}.
      */
+    /** The packages of the module cards Home shows, in card order: where live_wallpaper looks for a picture. */
+    private List<String> shownCardPackages() {
+        if (cards.isEmpty()) return Collections.emptyList();
+        List<String> packages = new ArrayList<>();
+        for (Cards.Card card : cards) {
+            if (card.state == Cards.State.SHOWN) packages.add(card.pkg);
+        }
+        return packages;
+    }
+
     private void updateWeatherLine() {
         if (weatherLine == null) return;
         WeatherLine.Reading reading = null;

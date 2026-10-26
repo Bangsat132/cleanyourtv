@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dynamic Wallpaper</string>
+    <string name="refresh">Refresh now</string>
+    <string name="loading">Reading the weather…</string>
+    <string name="no_reading">No reading yet</string>
+    <string name="no_reading_hint">Connect the TV to the internet, then press Refresh now.</string>
+    <!-- place, temperature, condition -->
+    <string name="headline">%1$s · %2$d° · %3$s</string>
+    <!-- feels, high, low, humidity, wind, rain chance -->
+    <string name="detail">Feels like %1$d°  ·  High %2$d° / Low %3$d°\nHumidity %4$d%%  ·  Wind %5$d km/h  ·  Rain %6$d%%</string>
+    <string name="picture_line">Wallpaper: %1$s</string>
+    <string name="updated">Updated %1$s</string>
+    <string name="updated_stale">Updated %1$s · offline, using the last reading</string>
+
+    <string name="mood_clear">Clear</string>
+    <string name="mood_clouds">Cloudy</string>
+    <string name="mood_rain">Rain</string>
+    <string name="mood_storm">Storm</string>
+    <string name="mood_fog">Fog</string>
+    <string name="mood_snow">Snow</string>
+</resources>

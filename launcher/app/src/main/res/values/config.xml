@@ -436,4 +436,12 @@
          faint outer glow), rim (the crisp rim alone, no sheen, fill or glow, for a quiet focus over a wallpaper) or
          halo (the rim with a lighter outer glow). Can also be set with "glass_style": "rim" in a theme's config.json. -->
     <string name="glass_style" translatable="false">glass</string>
+    <!-- A wallpaper an add-on draws: the first shown module card that serves
+         content://<its package>.cardart/wallpaper.png has its picture drawn behind Home, refreshed every 30
+         minutes, instead of the theme's picture or wallpapers/ collection. The add-on owns the fetch and the
+         choice (the weather add-on picks by condition and time of day); the launcher itself has no network
+         permission and downloads nothing. When no card publishes a picture, or the read fails, Home falls back
+         to the theme's collection and then to background_color, so a missing add-on never leaves a blank screen.
+         Off by default; a theme can set "live_wallpaper": true. -->
+    <bool name="live_wallpaper">false</bool>
 </resources>
