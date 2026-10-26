@@ -2528,6 +2528,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private static final int RACE_RED = 0xFFFF3B2F;
 
     /**
+     * Takes a reading in the background when the cache is stale, then updates the sky and the block on the UI thread.
+     * Home never waits for the network: the cached reading is already on screen, and a failed fetch leaves it there.
+     */
+    private void refreshWeather() {
+        if (!weatherBackdropOn || weatherFetching || !WeatherFeed.due(this)) return;
+        weatherFetching = true;
+        new Thread(() -> {
+            final WeatherFeed.Reading reading = WeatherFeed.fetch(this);
+            handler.post(() -> {
+                weatherFetching = false;
+                if (reading == null) return;   // offline or a bad answer: the last reading stays
+                weatherReading = reading;
+                applyWeather();
+                updateWeather();
+            });
+        }, "weather").start();
+    }
+
+    /** Draws the sky for the current reading, if the backdrop is on. */
+    private void applyWeather() {
+        WeatherFeed.Reading reading = weatherReading;
+        if (backdrop == null || reading == null) return;
+        backdrop.set(reading.mood(), reading.day());
+    }
+
+    /**
      * The weather under the date. The launcher's own reading is the only source (WeatherFeed, Open-Meteo, refreshed in
      * the background every 30 minutes and cached on the TV), so the block is drawn from what is already known and no
      * add-on has to be installed for it. With no reading yet — a first boot with no network — the block stays gone and
