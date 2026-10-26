@@ -98,7 +98,9 @@ final class WallpaperPlayer {
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
-        if (config.wallpaperEnabled && !files.isEmpty()) {
+        // The image view is also needed when only a live wallpaper is on: the theme may carry no collection at all
+        // (wallpaper false), and the add-on's picture still has to have a view to be drawn into.
+        if ((config.wallpaperEnabled && !files.isEmpty()) || liveEnabled) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             showFirst();
