@@ -168,4 +168,7 @@
     <string name="weather_humidity">Humidity %1$d%%</string>
     <string name="weather_wind">Wind %1$d km/h</string>
     <string name="weather_rain">Rain %1$d%%</string>
+    <string name="weather_temp">%1$d°</string>
+    <string name="weather_updated">Updated %1$s</string>
+    <string name="weather_updated_stale">Updated %1$s · offline</string>
 </resources>

@@ -84,12 +84,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.text.SimpleDateFormat;
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid, and one glass highlight that springs between tiles.
@@ -106,7 +108,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean rtlAppGrid;
     private static final long MINUTE_MS = 60_000L;
     /** How often the weather line under the date is read again from the add-on that publishes it. */
-    private static final long WEATHER_REFRESH_MS = WeatherLine.REFRESH_MS;
+    private static final long WEATHER_REFRESH_MS = WeatherFeed.REFRESH_MS;
     private static final long STATS_MS = 10_000L;
     /**
      * 2025-01-01. TVs without a clock battery boot at the epoch (08:00 in China) and keep it until network
@@ -186,8 +188,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean lunar;
     private int lunarOffset;
     private TextView stats;
-    /** The weather line under the date: the launcher's own reading, or a shown add-on's (WeatherLine) until there is one. */
-    private TextView weatherLine;
+    /** The weather block under the date: temperature and sky, then high/low, humidity, rain, wind and the time. */
+    private View weatherBlock;
+    private TextView weatherTemp, weatherCondition, weatherMeta, weatherUpdated;
     /** The sky drawn behind Home for the reading (config weather_backdrop); null when the switch is off. */
     private WeatherBackdrop backdrop;
     /** The last reading the launcher took itself; null until one arrives. */
@@ -200,7 +203,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         @Override
         public void run() {
             refreshWeather();
-            updateWeatherLine();
+            updateWeather();
             handler.postDelayed(this, WEATHER_REFRESH_MS);
         }
     };
@@ -514,7 +517,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         lunar = cfg.lunarDate;
         lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault());
         if (lunar) lunarDate.setVisibility(View.VISIBLE);
-        weatherLine = findViewById(R.id.weatherLine);
+        weatherBlock = findViewById(R.id.weatherBlock);
+        weatherTemp = findViewById(R.id.weatherTemp);
+        weatherCondition = findViewById(R.id.weatherCondition);
+        weatherMeta = findViewById(R.id.weatherMeta);
+        weatherUpdated = findViewById(R.id.weatherUpdated);
         greetingName = cfg.greetingName;
         if (cfg.dateBelowClock) moveDateBelowClock();
         if (shamsi) {
@@ -2521,81 +2528,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private static final int RACE_RED = 0xFFFF3B2F;
 
     /**
-     * The weather line under the date. Any shown module card that exports the live-reading provider is asked for its
-     * last reading, in card order, and the first one that has a reading is shown: an add-on that keeps no weather
-     * publishes nothing and the line stays hidden. Read on the UI thread, as it is a provider file of a few hundred
-     * bytes in this TV's own storage, and only every {@link #WEATHER_REFRESH_MS}.
+     * The weather under the date. The launcher's own reading is the only source (WeatherFeed, Open-Meteo, refreshed in
+     * the background every 30 minutes and cached on the TV), so the block is drawn from what is already known and no
+     * add-on has to be installed for it. With no reading yet — a first boot with no network — the block stays gone and
+     * Home looks exactly as it did before this feature.
      */
-    /**
-     * The weather line under the date. The launcher's own reading comes first (WeatherFeed, refreshed in the background
-     * every 30 minutes and cached on the TV), so the line is there on a TV with no add-on installed; when the launcher
-     * has no reading yet, the last one a shown module card publishes is used instead. Nothing here touches the network:
-     * the fetch happens on its own thread and the line only ever shows what is already known.
-     */
-    private void updateWeatherLine() {
-        if (weatherLine == null) return;
-        WeatherFeed.Reading own = weatherReading;
-        if (own != null) {
-            weatherLine.setText(weatherLine(own));
-            weatherLine.setVisibility(View.VISIBLE);
-            return;
-        }
-        WeatherLine.Reading reading = null;
-        for (Cards.Card card : cards) {
-            if (card.state != Cards.State.SHOWN) continue;
-            reading = WeatherLine.read(this, card.pkg);
-            if (reading != null) break;
-        }
-        if (reading == null) {
-            weatherLine.setVisibility(View.GONE);
-            return;
-        }
-        weatherLine.setText(reading.text);
-        weatherLine.setVisibility(View.VISIBLE);
-    }
-
-    /**
-     * Takes a reading in the background when the cache is stale, then updates the sky and the line on the UI thread.
-     * Home never waits for the network: the cached reading is already on screen, and a failed fetch leaves it there.
-     */
-    private void refreshWeather() {
-        if (!weatherBackdropOn || weatherFetching || !WeatherFeed.due(this)) return;
-        weatherFetching = true;
-        new Thread(() -> {
-            final WeatherFeed.Reading reading = WeatherFeed.fetch(this);
-            handler.post(() -> {
-                weatherFetching = false;
-                if (reading == null) return;   // offline or a bad answer: the last reading stays
-                weatherReading = reading;
-                applyWeather();
-                updateWeatherLine();
-            });
-        }, "weather").start();
-    }
-
-    /** Draws the sky for the current reading, if the backdrop is on. */
-    private void applyWeather() {
+    private void updateWeather() {
+        if (weatherBlock == null) return;
         WeatherFeed.Reading reading = weatherReading;
-        if (backdrop == null || reading == null) return;
-        backdrop.set(reading.mood(), reading.day());
-    }
-
-    /**
-     * The line itself: place, temperature, the sky's own word, then feels-like, high and low, humidity, wind and the
-     * rain chance, and the air quality when a weather add-on publishes one. Read from the reading the backdrop was
-     * drawn from, so the two always agree.
-     */
-    private String weatherLine(WeatherFeed.Reading reading) {
+        if (reading == null) {
+            weatherBlock.setVisibility(View.GONE);
+            return;
+        }
         Locale locale = Locale.getDefault();
-        StringBuilder line = new StringBuilder(WeatherFeed.place(this).toUpperCase(locale));
-        line.append(' ').append(reading.tempC).append('°');
-        line.append(' ').append(getString(WeatherBackdrop.labelOf(reading.mood(), reading.day())).toUpperCase(locale));
-        line.append("  ·  ").append(getString(R.string.weather_feels, reading.feelsC));
-        line.append("  ·  ").append(getString(R.string.weather_high_low, reading.highC, reading.lowC));
-        line.append("  ·  ").append(getString(R.string.weather_humidity, reading.humidity));
-        line.append("  ·  ").append(getString(R.string.weather_wind, reading.windKmh));
-        if (reading.rainChance >= 0) line.append("  ·  ").append(getString(R.string.weather_rain, reading.rainChance));
-        return line.toString();
+        weatherTemp.setText(getString(R.string.weather_temp, reading.tempC));
+        weatherCondition.setText(getString(WeatherBackdrop.labelOf(reading.mood(), reading.day())).toUpperCase(locale));
+        StringBuilder meta = new StringBuilder();
+        meta.append(getString(R.string.weather_high_low, reading.highC, reading.lowC));
+        meta.append("  ·  ").append(getString(R.string.weather_humidity, reading.humidity));
+        if (reading.rainChance >= 0) meta.append("  ·  ").append(getString(R.string.weather_rain, reading.rainChance));
+        meta.append("  ·  ").append(getString(R.string.weather_wind, reading.windKmh));
+        weatherMeta.setText(meta);
+        String time = new SimpleDateFormat("HH:mm", locale).format(new Date(reading.takenAt));
+        weatherUpdated.setText(reading.stale
+                ? getString(R.string.weather_updated_stale, time)
+                : getString(R.string.weather_updated, time));
+        weatherBlock.setVisibility(View.VISIBLE);
     }
 
     /**

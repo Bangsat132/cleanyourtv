@@ -124,4 +124,7 @@
     <string name="weather_humidity">Lembab %1$d%%</string>
     <string name="weather_wind">Angin %1$d km/j</string>
     <string name="weather_rain">Hujan %1$d%%</string>
+    <string name="weather_temp">%1$d°</string>
+    <string name="weather_updated">Diperbarui %1$s</string>
+    <string name="weather_updated_stale">Diperbarui %1$s · offline</string>
 </resources>

@@ -272,22 +272,77 @@
                             android:letterSpacing="0.14"
                             android:textAllCaps="true" />
 
-                        <!-- The weather line: one line under the date, from the weather add-on's last reading
-                             (module card live art). Gone until an add-on publishes one. -->
-                        <TextView
-                            android:id="@+id/weatherLine"
-                            android:gravity="left"
+                        <!-- The weather under the date, as a block rather than one long line: the temperature and the
+                             sky side by side, then the day's high and low with humidity, rain and wind, then when the
+                             reading was taken. Drawn from the launcher's own reading (WeatherFeed); gone until there
+                             is one, so Home looks exactly as before on a set with no network. -->
+                        <LinearLayout
+                            android:id="@+id/weatherBlock"
+                            android:orientation="vertical"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="5dp"
-                            android:singleLine="true"
-                            android:ellipsize="end"
-                            android:textColor="#D9FFFFFF"
-                            android:textSize="13sp"
-                            android:fontFamily="@string/font_medium"
-                            android:letterSpacing="0.08"
-                            android:focusable="false"
-                            android:visibility="gone" />
+                            android:layout_marginTop="6dp"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:orientation="horizontal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:gravity="bottom">
+
+                                <TextView
+                                    android:id="@+id/weatherTemp"
+                                    android:gravity="left"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:singleLine="true"
+                                    android:includeFontPadding="false"
+                                    android:textColor="#FFFFFFFF"
+                                    android:textSize="26sp"
+                                    android:fontFamily="@string/font_light"
+                                    android:letterSpacing="0.02" />
+
+                                <TextView
+                                    android:id="@+id/weatherCondition"
+                                    android:gravity="left"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="9dp"
+                                    android:layout_marginBottom="3dp"
+                                    android:singleLine="true"
+                                    android:includeFontPadding="false"
+                                    android:textColor="#E6FFFFFF"
+                                    android:textSize="13sp"
+                                    android:fontFamily="@string/font_medium"
+                                    android:letterSpacing="0.14" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/weatherMeta"
+                                android:gravity="left"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:singleLine="true"
+                                android:ellipsize="end"
+                                android:textColor="#CCFFFFFF"
+                                android:textSize="13sp"
+                                android:fontFamily="@string/font_regular"
+                                android:letterSpacing="0.06" />
+
+                            <TextView
+                                android:id="@+id/weatherUpdated"
+                                android:gravity="left"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:singleLine="true"
+                                android:ellipsize="end"
+                                android:textColor="#99FFFFFF"
+                                android:textSize="11sp"
+                                android:fontFamily="@string/font_regular"
+                                android:letterSpacing="0.08" />
+                        </LinearLayout>
 
                         <!-- Lunar date ("Lunar 13/9 · Year of the Horse"), shown when lunar_date is on. -->
                         <TextView
