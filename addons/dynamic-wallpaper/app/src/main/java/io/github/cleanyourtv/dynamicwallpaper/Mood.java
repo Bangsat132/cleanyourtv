@@ -25,7 +25,7 @@ final class Mood {
         if (code >= 71 && code <= 77) return SNOW;
         if (code == 85 || code == 86) return SNOW;
         if (code >= 80 && code <= 82) return RAIN;
-        if (code >= 95) return STORM;
+        if (code >= 95 && code <= 99) return STORM;
         return CLOUDS;
     }
 
