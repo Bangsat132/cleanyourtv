@@ -37,6 +37,7 @@ fits the rules; keys from before the rule sit on its wanted list until a screens
 | `top_bar_apps` | <img src="switches/top_bar_apps.jpg" width="320" alt="top_bar_apps on a TV"> |
 | `show_greeting` | <img src="switches/show_greeting.jpg" width="320" alt="show_greeting on a TV"> |
 | `header_white` | <img src="switches/header_white.jpg" width="320" alt="header_white on a TV"> |
+| `weather_backdrop` | <img src="switches/weather_backdrop.jpg" width="320" alt="weather_backdrop on a TV"> |
 | `clock_wallpaper` | <img src="switches/clock_wallpaper.jpg" width="320" alt="clock_wallpaper on a TV"> |
 | `clock_wallpaper_dim` | <img src="switches/clock_wallpaper.jpg" width="320" alt="clock_wallpaper_dim on a TV"> |
 | `clock_glow` | <img src="switches/clock_glow.jpg" width="320" alt="clock_glow on a TV"> |

@@ -85,6 +85,11 @@ final class WeatherFeed {
         }
     }
 
+    /** The place's name as config.xml writes it (weather_place), for the line under the date. */
+    static String place(Context ctx) {
+        return ctx.getString(R.string.weather_place);
+    }
+
     /** The URL for a place: Celsius, km/h, and the place's own timezone. */
     static String url(String latitude, String longitude, String timezone) {
         return "https://api.open-meteo.com/v1/forecast"

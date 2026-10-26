@@ -2587,7 +2587,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     private String weatherLine(WeatherFeed.Reading reading) {
         Locale locale = Locale.getDefault();
-        StringBuilder line = new StringBuilder(getString(R.string.weather_place).toUpperCase(locale));
+        StringBuilder line = new StringBuilder(WeatherFeed.place(this).toUpperCase(locale));
         line.append(' ').append(reading.tempC).append('°');
         line.append(' ').append(getString(WeatherBackdrop.labelOf(reading.mood(), reading.day())).toUpperCase(locale));
         line.append("  ·  ").append(getString(R.string.weather_feels, reading.feelsC));

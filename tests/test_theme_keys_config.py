@@ -35,6 +35,7 @@ JAVA_DIR = ROOT / "launcher" / "app" / "src" / "main" / "java" / "com" / "gathin
 CONFIG_JAVA = JAVA_DIR / "Config.java"
 SYSTEM_SETTINGS = JAVA_DIR / "SystemSettings.java"
 SKY_VIEW = JAVA_DIR / "SkyView.java"
+WEATHER_FEED = JAVA_DIR / "WeatherFeed.java"
 
 # A key is lowercase to stay readable next to `config.xml`; `app_keys` qualifies, a backticked value such
 # as `false` or `#RRGGBB` does not.
@@ -53,6 +54,12 @@ QUERIES_PACKAGE = re.compile(r'<package\s+android:name="([^"]+)"')
 EXEMPT = {
     "latitude": "docs/sky.md: the sky's place, a build setting no theme can move",
     "longitude": "docs/sky.md: the sky's place, a build setting no theme can move",
+    # The weather feed's place, for the same reason: a build setting, not something a theme moves. Read by
+    # WeatherFeed.java rather than SkyView.java, so the check below knows which file to look in.
+    "weather_place": "config.xml only: the weather feed's place, a build setting (WeatherFeed.java)",
+    "weather_latitude": "config.xml only: the weather feed's place, a build setting (WeatherFeed.java)",
+    "weather_longitude": "config.xml only: the weather feed's place, a build setting (WeatherFeed.java)",
+    "weather_timezone": "config.xml only: the weather feed's place, a build setting (WeatherFeed.java)",
 }
 
 
@@ -214,11 +221,13 @@ class KeysTableCoversConfigXmlTest(unittest.TestCase):
         # they may only stay out while they are what that page describes: config.xml lines SkyView reads.
         config = config_keys(self.config)
         sky = SKY_VIEW.read_text(encoding="utf-8")
-        for name in EXEMPT:
+        feed = WEATHER_FEED.read_text(encoding="utf-8")
+        for name, reason in EXEMPT.items():
             with self.subTest(key=name):
                 self.assertIn(name, config, f"`{name}` is gone from config.xml: drop its EXEMPT entry")
-                self.assertIn(f"R.string.{name}", sky, f"SkyView.java no longer reads `{name}`: is the "
-                                                      f"docs/sky.md page still right?")
+                reader, source = (feed, "WeatherFeed.java") if "WeatherFeed.java" in reason else (sky, "SkyView.java")
+                self.assertIn(f"R.string.{name}", reader, f"{source} no longer reads `{name}`: is the page that "
+                                                         f"documents it still right?")
                 self.assertNotIn(name, table_keys(self.text),
                                  f"`{name}` is in the Keys table now: drop its EXEMPT entry")
 
