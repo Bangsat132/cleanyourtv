@@ -199,6 +199,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean weatherFetching;
     /** config weather_backdrop, kept for the background fetch; false leaves the whole feed off. */
     private boolean weatherBackdropOn;
+    /** True once a fetch has failed: the block then says the reading is the cached one. */
+    private boolean weatherOffline;
     private final Runnable weatherTick = new Runnable() {
         @Override
         public void run() {
@@ -2538,7 +2540,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             final WeatherFeed.Reading reading = WeatherFeed.fetch(this);
             handler.post(() -> {
                 weatherFetching = false;
-                if (reading == null) return;   // offline or a bad answer: the last reading stays
+                weatherOffline = reading == null;
+                if (reading == null) {          // offline or a bad answer: the last reading stays
+                    updateWeather();
+                    return;
+                }
                 weatherReading = reading;
                 applyWeather();
                 updateWeather();
@@ -2576,7 +2582,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         meta.append("  ·  ").append(getString(R.string.weather_wind, reading.windKmh));
         weatherMeta.setText(meta);
         String time = new SimpleDateFormat("HH:mm", locale).format(new Date(reading.takenAt));
-        weatherUpdated.setText(reading.stale
+        weatherUpdated.setText(weatherOffline
                 ? getString(R.string.weather_updated_stale, time)
                 : getString(R.string.weather_updated, time));
         weatherBlock.setVisibility(View.VISIBLE);
