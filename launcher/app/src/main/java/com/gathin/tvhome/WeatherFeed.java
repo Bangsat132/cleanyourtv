@@ -1,53 +1,52 @@
-package io.github.cleanyourtv.dynamicwallpaper;
+package com.gathin.tvhome;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Log;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 /**
- * One weather reading, from Open-Meteo, cached on the TV.
+ * The weather for one place, fetched by the launcher itself from Open-Meteo and kept on the TV.
  *
- * The reading is fetched at most every {@link #REFRESH_MS} and always written to disk before it is shown, so Home's
- * wallpaper and the page survive a reboot with no network at all: the last good reading is used and the picture it
- * chose stays. A failed fetch never clears the cache and never throws at the caller — it returns the cached reading
- * with {@link Reading#stale} set, or null when there has never been one.
+ * The launcher asks for a reading at most every {@link #REFRESH_MS}, always on a background thread, and writes it to
+ * its own preferences before it is shown, so Home draws the last reading across a reboot and with no network at all.
+ * A failed fetch never clears the cache and never throws at the caller: the cached reading comes back with
+ * {@link Reading#stale} set, or null when there has never been one.
  *
- * Open-Meteo needs no key and no account, which is why this add-on uses it: nothing secret has to be built into an APK
- * that a TV owner sideloads.
+ * Open-Meteo needs no key and no account, which is why it is the source: nothing secret has to be built into an APK
+ * people sideload. The place is config.xml's {@code weather_latitude}, {@code weather_longitude} and
+ * {@code weather_timezone} (Palembang, Asia/Jakarta by default), so the TV is never asked where it is.
+ *
+ * The reading is what the header line shows and what {@link WeatherBackdrop} draws its picture from.
  */
-final class Weather {
-    static final String TAG = "DynamicWallpaper";
-    /** How often the reading is taken; the launcher shows the picture that came with it. */
+final class WeatherFeed {
+    static final String TAG = Cards.TAG;
+    /** How often a reading is taken: the line and the backdrop both follow it. */
     static final long REFRESH_MS = 30 * 60_000L;
     /** A fetch that takes longer than this is given up on: Home must never wait for the network. */
     private static final int TIMEOUT_MS = 8000;
-    /** A reading larger than this is not one of ours. */
+    /** An answer larger than this is not one of ours. */
     private static final int MAX_BYTES = 64 * 1024;
-    private static final String CACHE = "weather.json";
-    private static final String CACHE_TIME = "weather_at.txt";
+    private static final String PREFS = "weather_feed";
+    private static final String KEY_READING = "reading";
+    private static final String KEY_AT = "at";
 
-    private Weather() {
+    private WeatherFeed() {
     }
 
-    /** A reading, with the fields the page and the picture need. */
+    /** One reading, with the fields the header line and the backdrop use. */
     static final class Reading {
         final int tempC, feelsC, humidity, windKmh, code, highC, lowC, rainChance;
         final int sunriseMinute, sunsetMinute, nowMinute;
         final long takenAt;
-        /** True when this is the cached reading because the fetch failed. */
+        /** True when this is the cached reading because the fetch failed or is not due. */
         final boolean stale;
 
         Reading(int tempC, int feelsC, int humidity, int windKmh, int code, int highC, int lowC, int rainChance,
@@ -67,20 +66,26 @@ final class Weather {
             this.stale = stale;
         }
 
+        /** Day runs from the reading's own sunrise to its sunset. */
         boolean day() {
             return nowMinute >= sunriseMinute && nowMinute < sunsetMinute;
         }
 
+        /** The picture's mood: clear, clouds, rain, storm, fog or snow (WMO code). */
         String mood() {
-            return Mood.of(code);
-        }
-
-        String picture() {
-            return Mood.picture(mood(), day());
+            if (code == 0 || code == 1) return WeatherBackdrop.CLEAR;
+            if (code == 2 || code == 3) return WeatherBackdrop.CLOUDS;
+            if (code == 45 || code == 48) return WeatherBackdrop.FOG;
+            if (code >= 51 && code <= 67) return WeatherBackdrop.RAIN;
+            if (code >= 71 && code <= 77) return WeatherBackdrop.SNOW;
+            if (code == 85 || code == 86) return WeatherBackdrop.SNOW;
+            if (code >= 80 && code <= 82) return WeatherBackdrop.RAIN;
+            if (code >= 95 && code <= 99) return WeatherBackdrop.STORM;
+            return WeatherBackdrop.CLOUDS;
         }
     }
 
-    /** The URL for a place, in the units the page shows: Celsius, km/h, the place's own timezone. */
+    /** The URL for a place: Celsius, km/h, and the place's own timezone. */
     static String url(String latitude, String longitude, String timezone) {
         return "https://api.open-meteo.com/v1/forecast"
                 + "?latitude=" + latitude + "&longitude=" + longitude
@@ -89,55 +94,33 @@ final class Weather {
                 + "&timezone=" + timezone + "&forecast_days=1";
     }
 
-    /**
-     * The reading to show: fetched when the cache is older than {@link #REFRESH_MS} (or when {@code force} is set),
-     * the cache otherwise. Never null once a reading has ever been taken on this TV.
-     */
-    static Reading get(Context ctx, boolean force) {
-        Context app = ctx.getApplicationContext();
-        Reading cached = cached(app);
-        long takenAt = cacheTime(app);
-        if (!force && cached != null && System.currentTimeMillis() - takenAt < REFRESH_MS) return cached;
+    /** The cached reading, or null when there is none: the caller then shows no line and no backdrop. */
+    static Reading cached(Context ctx) {
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String json = prefs.getString(KEY_READING, null);
+        if (json == null) return null;
         try {
-            Reading fresh = fetch(app);
-            if (fresh != null) {
-                store(app, fresh);
-                return fresh;
-            }
-        } catch (Exception | OutOfMemoryError e) {
-            Log.w(TAG, "weather fetch failed, keeping the last reading: " + e);
-        }
-        return cached;
-    }
-
-    /** The last reading, read back from the cache; null when there is none or it does not parse. */
-    private static Reading cached(Context ctx) {
-        File file = new File(ctx.getFilesDir(), CACHE);
-        if (!file.isFile()) return null;
-        try (InputStream in = new FileInputStream(file)) {
-            String json = read(in);
-            return parse(new JSONObject(json), cacheTime(ctx), true);
+            return parse(new JSONObject(json), prefs.getLong(KEY_AT, 0), true);
         } catch (Exception e) {
-            Log.w(TAG, "unreadable cached reading: " + e);
+            Log.w(TAG, "unreadable cached weather: " + e);
             return null;
         }
     }
 
-    private static long cacheTime(Context ctx) {
-        File file = new File(ctx.getFilesDir(), CACHE_TIME);
-        if (!file.isFile()) return 0;
-        try (InputStream in = new FileInputStream(file)) {
-            return Long.parseLong(read(in).trim());
-        } catch (Exception e) {
-            return 0;
-        }
+    /** True when the cache is older than {@link #REFRESH_MS}, or missing: a fetch is then worth a thread. */
+    static boolean due(Context ctx) {
+        long at = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_AT, 0);
+        return at == 0 || System.currentTimeMillis() - at >= REFRESH_MS;
     }
 
-    /** Fetches and parses one reading; null when the answer is not a reading. */
-    private static Reading fetch(Context ctx) throws Exception {
-        String lat = ctx.getString(R.string.place_latitude);
-        String lon = ctx.getString(R.string.place_longitude);
-        String zone = ctx.getString(R.string.place_timezone);
+    /**
+     * Fetches one reading and caches it. Blocking: call it off the UI thread. Returns null when the answer is not a
+     * reading, and leaves the cache exactly as it was.
+     */
+    static Reading fetch(Context ctx) {
+        String lat = ctx.getString(R.string.weather_latitude);
+        String lon = ctx.getString(R.string.weather_longitude);
+        String zone = ctx.getString(R.string.weather_timezone);
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(url(lat, lon, zone)).openConnection();
@@ -148,17 +131,23 @@ final class Weather {
                 Log.w(TAG, "Open-Meteo answered " + connection.getResponseCode());
                 return null;
             }
+            Reading reading;
             try (InputStream in = connection.getInputStream()) {
-                return parse(new JSONObject(read(in)), System.currentTimeMillis(), false);
+                reading = parse(new JSONObject(read(in)), System.currentTimeMillis(), false);
             }
+            store(ctx, reading);
+            return reading;
+        } catch (Exception | OutOfMemoryError e) {
+            Log.w(TAG, "weather fetch failed, keeping the last reading: " + e);
+            return null;
         } finally {
             if (connection != null) connection.disconnect();
         }
     }
 
     /**
-     * The fields of Open-Meteo's answer, in the shape this app uses. A missing or malformed field is not fatal: the
-     * reading keeps 0 there and the page simply omits that line.
+     * The fields of Open-Meteo's answer. A missing or malformed field is not fatal: the reading keeps a sensible value
+     * there and the line leaves that part out.
      */
     static Reading parse(JSONObject json, long takenAt, boolean stale) throws Exception {
         JSONObject current = json.getJSONObject("current");
@@ -184,9 +173,8 @@ final class Weather {
         int t = iso.indexOf('T');
         if (t < 0 || iso.length() < t + 6) return fallback;
         try {
-            int hour = Integer.parseInt(iso.substring(t + 1, t + 3));
-            int minute = Integer.parseInt(iso.substring(t + 4, t + 6));
-            return hour * 60 + minute;
+            return Integer.parseInt(iso.substring(t + 1, t + 3)) * 60
+                    + Integer.parseInt(iso.substring(t + 4, t + 6));
         } catch (NumberFormatException e) {
             return fallback;
         }
@@ -208,7 +196,7 @@ final class Weather {
         }
     }
 
-    /** The cache is written in one step: a temporary file renamed over the last one, so a half file is never read. */
+    /** The reading is written in one step (a preferences commit), so a half reading is never read back. */
     private static void store(Context ctx, Reading reading) {
         JSONObject json = new JSONObject();
         try {
@@ -220,15 +208,17 @@ final class Weather {
             current.put("wind_speed_10m", reading.windKmh);
             current.put("weather_code", reading.code);
             JSONObject daily = new JSONObject();
-            daily.put("temperature_2m_max", new org.json.JSONArray().put(reading.highC));
-            daily.put("temperature_2m_min", new org.json.JSONArray().put(reading.lowC));
-            daily.put("precipitation_probability_max", new org.json.JSONArray().put(reading.rainChance));
-            daily.put("sunrise", new org.json.JSONArray().put(isoOf(reading.sunriseMinute)));
-            daily.put("sunset", new org.json.JSONArray().put(isoOf(reading.sunsetMinute)));
+            daily.put("temperature_2m_max", new JSONArray().put(reading.highC));
+            daily.put("temperature_2m_min", new JSONArray().put(reading.lowC));
+            daily.put("precipitation_probability_max", new JSONArray().put(reading.rainChance));
+            daily.put("sunrise", new JSONArray().put(isoOf(reading.sunriseMinute)));
+            daily.put("sunset", new JSONArray().put(isoOf(reading.sunsetMinute)));
             json.put("current", current);
             json.put("daily", daily);
-            write(ctx, CACHE, json.toString());
-            write(ctx, CACHE_TIME, Long.toString(reading.takenAt));
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putString(KEY_READING, json.toString())
+                    .putLong(KEY_AT, reading.takenAt)
+                    .apply();
         } catch (Exception e) {
             Log.w(TAG, "could not cache the reading: " + e);
         }
@@ -238,24 +228,14 @@ final class Weather {
         return String.format(java.util.Locale.ROOT, "2000-01-01T%02d:%02d", minute / 60, minute % 60);
     }
 
-    private static void write(Context ctx, String name, String text) throws IOException {
-        File target = new File(ctx.getFilesDir(), name);
-        File temp = new File(ctx.getFilesDir(), name + ".tmp");
-        try (FileOutputStream out = new FileOutputStream(temp)) {
-            out.write(text.getBytes(StandardCharsets.UTF_8));
-            out.flush();
-        }
-        if (!temp.renameTo(target)) throw new IOException("rename to " + target.getName() + " failed");
-    }
-
-    /** Reads a stream whole, bounded: a response that is not ours is refused rather than loaded. */
-    private static String read(InputStream in) throws IOException {
+    /** Reads a stream whole, bounded: an answer that is not ours is refused rather than loaded. */
+    private static String read(InputStream in) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buffer = new byte[4096];
         int length = 0;
         for (int n; (n = in.read(buffer)) != -1; ) {
             length += n;
-            if (length > MAX_BYTES) throw new IOException("response over " + MAX_BYTES + " bytes");
+            if (length > MAX_BYTES) throw new Exception("answer over " + MAX_BYTES + " bytes");
             out.write(buffer, 0, n);
         }
         return out.toString("UTF-8");

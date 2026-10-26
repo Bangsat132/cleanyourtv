@@ -149,4 +149,23 @@
     <!-- Cinematic top shelf (cinematic_home): the line under the focused dock app's name; %1$s is when it was
          last opened, e.g. "5 minutes ago" or "yesterday, 9:40 pm". -->
     <string name="last_opened">Last opened %1$s</string>
+    <!-- The weather line under the date, and the backdrop's own name in it (WeatherFeed, WeatherBackdrop). -->
+    <string name="sky_clear_day">Clear</string>
+    <string name="sky_clear_night">Clear</string>
+    <string name="sky_clouds_day">Cloudy</string>
+    <string name="sky_clouds_night">Cloudy</string>
+    <string name="sky_rain_day">Rain</string>
+    <string name="sky_rain_night">Rain</string>
+    <string name="sky_storm_day">Storm</string>
+    <string name="sky_storm_night">Storm</string>
+    <string name="sky_fog_day">Fog</string>
+    <string name="sky_fog_night">Fog</string>
+    <string name="sky_snow_day">Snow</string>
+    <string name="sky_snow_night">Snow</string>
+    <!-- The weather line under the date (WeatherFeed): feels-like, high and low, humidity, wind, rain chance. -->
+    <string name="weather_feels">Feels %1$d°</string>
+    <string name="weather_high_low">%1$d°/%2$d°</string>
+    <string name="weather_humidity">Humidity %1$d%%</string>
+    <string name="weather_wind">Wind %1$d km/h</string>
+    <string name="weather_rain">Rain %1$d%%</string>
 </resources>

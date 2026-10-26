@@ -61,15 +61,8 @@ final class WallpaperPlayer {
     private final String latitude, longitude;
     private LocalDate sunDay;
     private int[] sun;
-    /** config live_wallpaper: the shown module cards' published picture is shown instead of the collection. */
-    private final boolean liveEnabled;
-    private final LiveWallpaper.Sources liveSources;
-    /** When the add-ons were last asked for a picture; 0 until the first read. */
-    private long liveReadAt;
 
-    WallpaperPlayer(Context context, FrameLayout root, Config config, LiveWallpaper.Sources liveSources) {
-        this.liveSources = liveSources;
-        liveEnabled = config.liveWallpaper && liveSources != null;
+    WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.root = root;
         backgroundColor = config.backgroundColor;
         files = new ArrayList<>(config.wallpapers);
@@ -98,9 +91,7 @@ final class WallpaperPlayer {
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
-        // The image view is also needed when only a live wallpaper is on: the theme may carry no collection at all
-        // (wallpaper false), and the add-on's picture still has to have a view to be drawn into.
-        if ((config.wallpaperEnabled && !files.isEmpty()) || liveEnabled) {
+        if (config.wallpaperEnabled && !files.isEmpty()) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             showFirst();
@@ -114,7 +105,6 @@ final class WallpaperPlayer {
      */
     private void showFirst() {
         String previous = preferences.getString("image", "");
-        if (liveEnabled && showLive()) return;
         List<File> playable = playable();
         File first = WallpaperRotation.find(playable, previous);
         if (first == null) first = WallpaperRotation.pick(playable, previous, order, random);
@@ -176,12 +166,7 @@ final class WallpaperPlayer {
     }
 
     void update() {
-        if (!active || closed || loading) return;
-        if (liveEnabled && liveDue()) {
-            liveUpdate();
-            return;
-        }
-        if (files.isEmpty()) return;
+        if (!active || closed || loading || files.isEmpty()) return;
         String previous = preferences.getString("image", "");
         // A picture outside the time of day's group (the group changed) is replaced at once, not after the interval.
         List<File> playable = playable();
@@ -272,50 +257,6 @@ final class WallpaperPlayer {
         StringBuilder key = new StringBuilder();
         for (File file : images) key.append(file.getName()).append(':').append(file.length()).append(';');
         return key.toString();
-    }
-
-    /** True when the add-ons have not been asked for a picture in the last {@link LiveWallpaper#REFRESH_MS}. */
-    private boolean liveDue() {
-        return liveReadAt == 0 || System.currentTimeMillis() - liveReadAt >= LiveWallpaper.REFRESH_MS;
-    }
-
-    /**
-     * The picture an add-on publishes, drawn before the collection is looked at: Home's first frame already has it,
-     * as with a theme's single wallpaper. False when none of the shown cards publishes one, which leaves the ordinary
-     * path untouched.
-     */
-    private boolean showLive() {
-        liveReadAt = System.currentTimeMillis();
-        Bitmap bitmap = LiveWallpaper.read(root.getContext(), liveSources.packages(), width, height, bitmapConfig);
-        if (bitmap == null) return false;
-        if (current == bitmap) {
-            bitmap.recycle();
-            return true;
-        }
-        show(bitmap);
-        displayed = "";
-        if (caption != null) caption.setAlpha(0f);
-        return true;
-    }
-
-    /** The same read on the decoder thread, for the 30 minute refresh: never on the UI thread while Home is in use. */
-    private void liveUpdate() {
-        liveReadAt = System.currentTimeMillis();
-        loading = true;
-        decoder.execute(() -> {
-            Bitmap bitmap = LiveWallpaper.read(root.getContext(), liveSources.packages(), width, height, bitmapConfig);
-            root.post(() -> {
-                loading = false;
-                if (closed || !active) {
-                    if (bitmap != null) bitmap.recycle();
-                    return;
-                }
-                if (bitmap == null) return;   // the add-on has nothing new: the picture on screen stays
-                show(bitmap);
-                displayed = "";
-                if (caption != null) caption.setAlpha(0f);
-            });
-        });
     }
 
     /** Puts a picture on screen and releases the previous one after a frame has drawn the new one. */

@@ -9,6 +9,10 @@
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- The weather behind Home, and the line under the date: one HTTPS request to Open-Meteo every 30 minutes, taken
+         on a background thread and cached on the TV. config.xml's weather_backdrop turns the picture on; the line is
+         shown whenever a reading exists. No analytics, no telemetry, nothing else is fetched. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
          runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
          FINE" rule does not apply here. -->

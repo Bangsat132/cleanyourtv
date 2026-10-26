@@ -436,12 +436,17 @@
          faint outer glow), rim (the crisp rim alone, no sheen, fill or glow, for a quiet focus over a wallpaper) or
          halo (the rim with a lighter outer glow). Can also be set with "glass_style": "rim" in a theme's config.json. -->
     <string name="glass_style" translatable="false">glass</string>
-    <!-- A wallpaper an add-on draws: the first shown module card that serves
-         content://<its package>.cardart/wallpaper.png has its picture drawn behind Home, refreshed every 30
-         minutes, instead of the theme's picture or wallpapers/ collection. The add-on owns the fetch and the
-         choice (the weather add-on picks by condition and time of day); the launcher itself has no network
-         permission and downloads nothing. When no card publishes a picture, or the read fails, Home falls back
-         to the theme's collection and then to background_color, so a missing add-on never leaves a blank screen.
-         Off by default; a theme can set "live_wallpaper": true. -->
-    <bool name="live_wallpaper">false</bool>
+    <!-- The weather behind Home, drawn in code from a reading the launcher takes itself (no picture files in the
+         APK): clear, clouds, rain, storm, fog or snow, each by day and by night, faded to black where the dock and
+         the text sit. Refreshed every 30 minutes in the background; a failed fetch keeps the last reading, so Home
+         never waits for the network. The reading also fills the line under the date (temperature, feels-like,
+         humidity, wind, rain chance, air quality from the weather add-on when it is installed). Off by default; a
+         theme can set "weather_backdrop": true. -->
+    <bool name="weather_backdrop">false</bool>
+    <!-- The place the weather is for. Palembang, South Sumatra, Asia/Jakarta by default; the TV is never asked where
+         it is and the launcher asks for no location permission. -->
+    <string name="weather_place" translatable="false">Palembang</string>
+    <string name="weather_latitude" translatable="false">-2.9761</string>
+    <string name="weather_longitude" translatable="false">104.7754</string>
+    <string name="weather_timezone" translatable="false">Asia/Jakarta</string>
 </resources>

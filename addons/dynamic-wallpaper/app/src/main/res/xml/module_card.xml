@@ -1,3 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The launcher's card (docs/specs/card.md, spec 1): literal text only, no @string references. -->
-<card spec="1" label="Wallpaper" caption="Weather and time of day" accent="#3E7CB1" />

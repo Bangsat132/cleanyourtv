@@ -186,11 +186,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean lunar;
     private int lunarOffset;
     private TextView stats;
-    /** The weather line under the date, from the weather add-on's last reading (WeatherLine). */
+    /** The weather line under the date: the launcher's own reading, or a shown add-on's (WeatherLine) until there is one. */
     private TextView weatherLine;
+    /** The sky drawn behind Home for the reading (config weather_backdrop); null when the switch is off. */
+    private WeatherBackdrop backdrop;
+    /** The last reading the launcher took itself; null until one arrives. */
+    private volatile WeatherFeed.Reading weatherReading;
+    /** True while a fetch is in flight, so a resume and a tick never start two. */
+    private boolean weatherFetching;
     private final Runnable weatherTick = new Runnable() {
         @Override
         public void run() {
+            refreshWeather();
             updateWeatherLine();
             handler.postDelayed(this, WEATHER_REFRESH_MS);
         }
@@ -427,7 +434,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // black under it is a second full-screen fill on every frame for nothing. The starting window still uses
         // the theme's background, so launch looks the same.
         getWindow().setBackgroundDrawable(null);
-        wallpaperPlayer = new WallpaperPlayer(this, root, cfg, this::shownCardPackages);
+        wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
+        if (cfg.weatherBackdrop) {
+            // Behind everything, under the sky layer and the glass: the weather reading draws the picture Home opens with.
+            backdrop = new WeatherBackdrop(this);
+            root.addView(backdrop, 0, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            weatherReading = WeatherFeed.cached(this);   // a local read: Home's first frame already has the sky
+            applyWeather();
+        }
         sky = findViewById(R.id.sky);
         sky.setIntensity(cfg.skyIntensity);
         glass = findViewById(R.id.glass);
@@ -1102,9 +1117,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         cards = moduleCards ? CardFeature.run(() -> Cards.discover(this, hiddenApps,
                 () -> Cards.load(Cards.storeFile(this)), leanback), none) : none;
         adapter.reload(cards.isEmpty() ? none : CardFeature.run(() -> Cards.shown(cards), none), leanback);
-        // A card that publishes a picture (live_wallpaper) is only known now: ask again so Home picks it up at once
-        // instead of on the next 30 minute tick.
-        wallpaperPlayer.update();
         lastFocusedKey = returnKey;
         lastFocused = returnSlot;
         packageSequence = currentPackageSequence(packageSequence);
@@ -2511,18 +2523,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * publishes nothing and the line stays hidden. Read on the UI thread, as it is a provider file of a few hundred
      * bytes in this TV's own storage, and only every {@link #WEATHER_REFRESH_MS}.
      */
-    /** The packages of the module cards Home shows, in card order: where live_wallpaper looks for a picture. */
-    private List<String> shownCardPackages() {
-        if (cards.isEmpty()) return Collections.emptyList();
-        List<String> packages = new ArrayList<>();
-        for (Cards.Card card : cards) {
-            if (card.state == Cards.State.SHOWN) packages.add(card.pkg);
-        }
-        return packages;
-    }
-
+    /**
+     * The weather line under the date. The launcher's own reading comes first (WeatherFeed, refreshed in the background
+     * every 30 minutes and cached on the TV), so the line is there on a TV with no add-on installed; when the launcher
+     * has no reading yet, the last one a shown module card publishes is used instead. Nothing here touches the network:
+     * the fetch happens on its own thread and the line only ever shows what is already known.
+     */
     private void updateWeatherLine() {
         if (weatherLine == null) return;
+        WeatherFeed.Reading own = weatherReading;
+        if (own != null) {
+            weatherLine.setText(weatherLine(own));
+            weatherLine.setVisibility(View.VISIBLE);
+            return;
+        }
         WeatherLine.Reading reading = null;
         for (Cards.Card card : cards) {
             if (card.state != Cards.State.SHOWN) continue;
@@ -2535,6 +2549,50 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         weatherLine.setText(reading.text);
         weatherLine.setVisibility(View.VISIBLE);
+    }
+
+    /**
+     * Takes a reading in the background when the cache is stale, then updates the sky and the line on the UI thread.
+     * Home never waits for the network: the cached reading is already on screen, and a failed fetch leaves it there.
+     */
+    private void refreshWeather() {
+        if (!cfg.weatherBackdrop || weatherFetching || !WeatherFeed.due(this)) return;
+        weatherFetching = true;
+        new Thread(() -> {
+            final WeatherFeed.Reading reading = WeatherFeed.fetch(this);
+            handler.post(() -> {
+                weatherFetching = false;
+                if (reading == null) return;   // offline or a bad answer: the last reading stays
+                weatherReading = reading;
+                applyWeather();
+                updateWeatherLine();
+            });
+        }, "weather").start();
+    }
+
+    /** Draws the sky for the current reading, if the backdrop is on. */
+    private void applyWeather() {
+        WeatherFeed.Reading reading = weatherReading;
+        if (backdrop == null || reading == null) return;
+        backdrop.set(reading.mood(), reading.day());
+    }
+
+    /**
+     * The line itself: place, temperature, the sky's own word, then feels-like, high and low, humidity, wind and the
+     * rain chance, and the air quality when a weather add-on publishes one. Read from the reading the backdrop was
+     * drawn from, so the two always agree.
+     */
+    private String weatherLine(WeatherFeed.Reading reading) {
+        Locale locale = Locale.getDefault();
+        StringBuilder line = new StringBuilder(getString(R.string.weather_place).toUpperCase(locale));
+        line.append(' ').append(reading.tempC).append('°');
+        line.append(' ').append(getString(WeatherBackdrop.labelOf(reading.mood(), reading.day())).toUpperCase(locale));
+        line.append("  ·  ").append(getString(R.string.weather_feels, reading.feelsC));
+        line.append("  ·  ").append(getString(R.string.weather_high_low, reading.highC, reading.lowC));
+        line.append("  ·  ").append(getString(R.string.weather_humidity, reading.humidity));
+        line.append("  ·  ").append(getString(R.string.weather_wind, reading.windKmh));
+        if (reading.rainChance >= 0) line.append("  ·  ").append(getString(R.string.weather_rain, reading.rainChance));
+        return line.toString();
     }
 
     /**

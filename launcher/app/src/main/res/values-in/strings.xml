@@ -107,4 +107,21 @@
     <string name="race_live">%1$s · langsung</string>
     <string name="race_finished">Bendera finis</string>
     <string name="last_opened">Terakhir dibuka %1$s</string>
+    <string name="sky_clear_day">Cerah</string>
+    <string name="sky_clear_night">Cerah</string>
+    <string name="sky_clouds_day">Berawan</string>
+    <string name="sky_clouds_night">Berawan</string>
+    <string name="sky_rain_day">Hujan</string>
+    <string name="sky_rain_night">Hujan</string>
+    <string name="sky_storm_day">Badai</string>
+    <string name="sky_storm_night">Badai</string>
+    <string name="sky_fog_day">Berkabut</string>
+    <string name="sky_fog_night">Berkabut</string>
+    <string name="sky_snow_day">Salju</string>
+    <string name="sky_snow_night">Salju</string>
+    <string name="weather_feels">Terasa %1$d°</string>
+    <string name="weather_high_low">%1$d°/%2$d°</string>
+    <string name="weather_humidity">Lembab %1$d%%</string>
+    <string name="weather_wind">Angin %1$d km/j</string>
+    <string name="weather_rain">Hujan %1$d%%</string>
 </resources>
