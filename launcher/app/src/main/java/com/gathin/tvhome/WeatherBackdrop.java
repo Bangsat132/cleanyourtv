@@ -2,7 +2,6 @@ package com.gathin.tvhome;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -266,14 +265,15 @@ final class WeatherBackdrop extends View {
         }
     }
 
+    /** The mood's colour as a literal ARGB, so the table can be unit-tested without Android's Color class. */
     static int colorOf(String mood) {
         switch (mood == null ? CLOUDS : mood) {
-            case CLEAR: return Color.rgb(0x5C, 0x86, 0xBE);
-            case RAIN: return Color.rgb(0x50, 0x6A, 0x84);
-            case STORM: return Color.rgb(0x4A, 0x48, 0x5C);
-            case FOG: return Color.rgb(0x8A, 0x8C, 0x92);
-            case SNOW: return Color.rgb(0x9A, 0xAA, 0xBE);
-            default: return Color.rgb(0x6E, 0x7C, 0x8C);
+            case CLEAR: return 0xFF5C86BE;
+            case RAIN: return 0xFF506A84;
+            case STORM: return 0xFF4A485C;
+            case FOG: return 0xFF8A8C92;
+            case SNOW: return 0xFF9AAABE;
+            default: return 0xFF6E7C8C;
         }
     }
 }
