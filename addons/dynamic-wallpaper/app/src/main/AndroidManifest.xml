@@ -4,9 +4,11 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
-    <!-- One permission, for the reading itself: the Open-Meteo call. No location permission: the city is written in
-         res/values/options.xml, so the TV never asks where it is. -->
+    <!-- Two permissions, both for the reading: INTERNET for the Open-Meteo call, and ACCESS_NETWORK_STATE because the
+         30 minute job asks for a network before it runs, which Android refuses to schedule without it. No location
+         permission: the city is written in res/values/options.xml, so the TV never asks where it is. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="false"
