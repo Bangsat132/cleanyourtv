@@ -194,6 +194,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private volatile WeatherFeed.Reading weatherReading;
     /** True while a fetch is in flight, so a resume and a tick never start two. */
     private boolean weatherFetching;
+    /** config weather_backdrop, kept for the background fetch; false leaves the whole feed off. */
+    private boolean weatherBackdropOn;
     private final Runnable weatherTick = new Runnable() {
         @Override
         public void run() {
@@ -435,7 +437,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // the theme's background, so launch looks the same.
         getWindow().setBackgroundDrawable(null);
         wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
-        if (cfg.weatherBackdrop) {
+        weatherBackdropOn = cfg.weatherBackdrop;
+        if (weatherBackdropOn) {
             // Behind everything, under the sky layer and the glass: the weather reading draws the picture Home opens with.
             backdrop = new WeatherBackdrop(this);
             root.addView(backdrop, 0, new FrameLayout.LayoutParams(
@@ -2556,7 +2559,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * Home never waits for the network: the cached reading is already on screen, and a failed fetch leaves it there.
      */
     private void refreshWeather() {
-        if (!cfg.weatherBackdrop || weatherFetching || !WeatherFeed.due(this)) return;
+        if (!weatherBackdropOn || weatherFetching || !WeatherFeed.due(this)) return;
         weatherFetching = true;
         new Thread(() -> {
             final WeatherFeed.Reading reading = WeatherFeed.fetch(this);
